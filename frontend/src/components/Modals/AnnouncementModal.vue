@@ -16,25 +16,26 @@
 		<template #body-content>
 			<div class="flex flex-col gap-4">
 				<div class="">
-					<div class="mb-1.5 text-sm text-gray-600">
+					<div class="mb-1.5 text-sm text-ink-gray-5">
 						{{ __('Subject') }}
+						<span class="text-ink-red-3">*</span>
 					</div>
 					<Input type="text" v-model="announcement.subject" />
 				</div>
 				<div class="">
-					<div class="mb-1.5 text-sm text-gray-600">
+					<div class="mb-1.5 text-sm text-ink-gray-5">
 						{{ __('Reply To') }}
 					</div>
 					<Input type="text" v-model="announcement.replyTo" />
 				</div>
 				<div class="mb-4">
-					<div class="mb-1.5 text-sm text-gray-600">
+					<div class="mb-1.5 text-sm text-ink-gray-5">
 						{{ __('Announcement') }}
 					</div>
 					<TextEditor
-						:bubbleMenu="true"
+						:fixedMenu="true"
 						@change="(val) => (announcement.announcement = val)"
-						editorClass="prose-sm py-2 px-2 min-h-[200px] border-gray-300 hover:border-gray-400 rounded-md bg-gray-200"
+						editorClass="prose-sm py-2 px-2 min-h-[200px] border-outline-gray-2 hover:border-outline-gray-3 rounded-b-md bg-surface-gray-3"
 					/>
 				</div>
 			</div>
@@ -44,7 +45,7 @@
 <script setup>
 import { Dialog, Input, TextEditor, createResource } from 'frappe-ui'
 import { reactive } from 'vue'
-import { createToast } from '@/utils/'
+import { showToast } from '@/utils/'
 
 const show = defineModel()
 
@@ -94,22 +95,14 @@ const makeAnnouncement = (close) => {
 			},
 			onSuccess() {
 				close()
-				createToast({
-					title: 'Success',
-					text: 'Announcement has been sent successfully',
-					icon: 'Check',
-					iconClasses: 'bg-green-600 text-white rounded-md p-px',
-				})
+				showToast(
+					__('Success'),
+					__('Announcement has been sent successfully'),
+					'check'
+				)
 			},
 			onError(err) {
-				createToast({
-					title: 'Error',
-					text: err.messages?.[0] || err,
-					icon: 'x',
-					iconClasses: 'bg-red-600 text-white rounded-md p-px',
-					position: 'top-center',
-					timeout: 10,
-				})
+				showToast(__('Error'), __(err.messages?.[0] || err), 'alert-circle')
 			},
 		}
 	)

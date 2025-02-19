@@ -1,7 +1,7 @@
 <template>
 	<div class="">
 		<header
-			class="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-3 py-2.5 sm:px-5"
+			class="sticky top-0 z-10 flex items-center justify-between border-b bg-surface-white px-3 py-2.5 sm:px-5"
 		>
 			<Breadcrumbs :items="breadcrumbs" />
 			<Button variant="solid" @click="saveJob()">
@@ -19,8 +19,13 @@
 							v-model="job.job_title"
 							:label="__('Title')"
 							class="mb-4"
+							:required="true"
 						/>
-						<FormControl v-model="job.location" :label="__('Location')" />
+						<FormControl
+							v-model="job.location"
+							:label="__('Location')"
+							:required="true"
+						/>
 					</div>
 					<div>
 						<FormControl
@@ -29,25 +34,28 @@
 							type="select"
 							:options="jobTypes"
 							class="mb-4"
+							:required="true"
 						/>
 						<FormControl
 							v-model="job.status"
 							:label="__('Status')"
 							type="select"
 							:options="jobStatuses"
+							:required="true"
 						/>
 					</div>
 				</div>
 				<div class="mt-4">
-					<label class="block text-gray-600 text-xs mb-1">
+					<label class="block text-ink-gray-5 text-xs mb-1">
 						{{ __('Description') }}
+						<span class="text-ink-red-3">*</span>
 					</label>
 					<TextEditor
 						:content="job.description"
 						@change="(val) => (job.description = val)"
 						:editable="true"
 						:fixedMenu="true"
-						editorClass="prose-sm max-w-none border-b border-x bg-gray-100 rounded-b-md py-1 px-2 min-h-[7rem] mb-4"
+						editorClass="prose-sm max-w-none border-b border-x bg-surface-gray-2 rounded-b-md py-1 px-2 min-h-[7rem] mb-4"
 					/>
 				</div>
 			</div>
@@ -61,10 +69,12 @@
 							v-model="job.company_name"
 							:label="__('Company Name')"
 							class="mb-4"
+							:required="true"
 						/>
 						<FormControl
 							v-model="job.company_website"
 							:label="__('Company Website')"
+							:required="true"
 						/>
 					</div>
 					<div>
@@ -72,9 +82,11 @@
 							v-model="job.company_email_address"
 							:label="__('Company Email Address')"
 							class="mb-4"
+							:required="true"
 						/>
-						<label class="block text-gray-600 text-xs mb-1 mt-4">
+						<label class="block text-ink-gray-5 text-xs mb-1 mt-4">
 							{{ __('Company Logo') }}
+							<span class="text-ink-red-3">*</span>
 						</label>
 						<FileUploader
 							v-if="!job.image"
@@ -97,19 +109,19 @@
 						<div v-else class="">
 							<div class="flex items-center">
 								<div class="border rounded-md p-2 mr-2">
-									<FileText class="h-5 w-5 stroke-1.5 text-gray-700" />
+									<FileText class="h-5 w-5 stroke-1.5 text-ink-gray-7" />
 								</div>
 								<div class="flex flex-col">
 									<span>
 										{{ job.image.file_name }}
 									</span>
-									<span class="text-sm text-gray-500 mt-1">
+									<span class="text-sm text-ink-gray-4 mt-1">
 										{{ getFileSize(job.image.file_size) }}
 									</span>
 								</div>
 								<X
 									@click="removeImage()"
-									class="bg-gray-200 rounded-md cursor-pointer stroke-1.5 w-5 h-5 p-1 ml-4"
+									class="bg-surface-gray-3 rounded-md cursor-pointer stroke-1.5 w-5 h-5 p-1 ml-4"
 								/>
 							</div>
 						</div>
@@ -149,7 +161,7 @@ const newJob = createResource({
 		return {
 			doc: {
 				doctype: 'Job Opportunity',
-				company_logo: job.image.file_url,
+				company_logo: job.image?.file_url,
 				...job,
 			},
 		}

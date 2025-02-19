@@ -1,50 +1,59 @@
 <template>
 	<div
-		class="flex h-full flex-col justify-between transition-all duration-300 ease-in-out bg-gray-50"
-		:class="isSidebarCollapsed ? 'w-14' : 'w-56'"
+		class="flex h-full flex-col justify-between transition-all duration-300 ease-in-out border-r bg-surface-menu-bar"
+		:class="sidebarStore.isSidebarCollapsed ? 'w-14' : 'w-56'"
 	>
 		<div
 			class="flex flex-col overflow-hidden"
-			:class="isSidebarCollapsed ? 'items-center' : ''"
+			:class="sidebarStore.isSidebarCollapsed ? 'items-center' : ''"
 		>
-			<UserDropdown class="p-2" :isCollapsed="isSidebarCollapsed" />
+			<UserDropdown :isCollapsed="sidebarStore.isSidebarCollapsed" />
 			<div class="flex flex-col" v-if="sidebarSettings.data">
 				<SidebarLink
 					v-for="link in sidebarLinks"
 					:link="link"
-					:isCollapsed="isSidebarCollapsed"
+					:isCollapsed="sidebarStore.isSidebarCollapsed"
 					class="mx-2 my-0.5"
 				/>
 			</div>
 			<div
 				v-if="sidebarSettings.data?.web_pages?.length || isModerator"
-				class="mt-4 pt-1 border-t border-gray-200"
+				class="mt-4"
 			>
 				<div
-					v-if="isModerator"
-					class="flex items-center justify-between pr-2"
-					:class="isSidebarCollapsed ? 'pl-3' : 'pl-5'"
+					class="flex items-center justify-between pr-2 cursor-pointer"
+					:class="sidebarStore.isSidebarCollapsed ? 'pl-3' : 'pl-4'"
+					@click="toggleWebPages"
 				>
-					<span
-						v-if="!isSidebarCollapsed"
-						class="text-sm font-medium text-gray-600"
+					<div
+						v-if="!sidebarStore.isSidebarCollapsed"
+						class="flex items-center text-sm text-ink-gray-5 my-1"
 					>
-						{{ __('Web Pages') }}
-					</span>
-					<Button variant="ghost" @click="openPageModal()">
+						<span class="grid h-5 w-6 flex-shrink-0 place-items-center">
+							<ChevronRight
+								class="h-4 w-4 stroke-1.5 text-ink-gray-9 transition-all duration-300 ease-in-out"
+								:class="{ 'rotate-90': !sidebarStore.isWebpagesCollapsed }"
+							/>
+						</span>
+						<span class="ml-2">
+							{{ __('More') }}
+						</span>
+					</div>
+					<Button v-if="isModerator" variant="ghost" @click="openPageModal()">
 						<template #icon>
-							<Plus class="h-4 w-4 text-gray-700 stroke-1.5" />
+							<Plus class="h-4 w-4 text-ink-gray-7 stroke-1.5" />
 						</template>
 					</Button>
 				</div>
 				<div
 					v-if="sidebarSettings.data?.web_pages?.length"
-					class="flex flex-col"
+					class="flex flex-col transition-all duration-300 ease-in-out"
+					:class="!sidebarStore.isWebpagesCollapsed ? 'block' : 'hidden'"
 				>
 					<SidebarLink
 						v-for="link in sidebarSettings.data.web_pages"
 						:link="link"
-						:isCollapsed="isSidebarCollapsed"
+						:isCollapsed="sidebarStore.isSidebarCollapsed"
 						class="mx-2 my-0.5"
 						:showControls="isModerator ? true : false"
 						@openModal="openPageModal"
@@ -53,23 +62,34 @@
 				</div>
 			</div>
 		</div>
-		<SidebarLink
-			:link="{
-				label: isSidebarCollapsed ? 'Expand' : 'Collapse',
-			}"
-			:isCollapsed="isSidebarCollapsed"
-			@click="isSidebarCollapsed = !isSidebarCollapsed"
-			class="m-2"
-		>
-			<template #icon>
-				<span class="grid h-5 w-6 flex-shrink-0 place-items-center">
-					<CollapseSidebar
-						class="h-4.5 w-4.5 text-gray-700 duration-300 ease-in-out"
-						:class="{ '[transform:rotateY(180deg)]': isSidebarCollapsed }"
-					/>
-				</span>
-			</template>
-		</SidebarLink>
+		<div>
+			<TrialBanner
+				v-if="
+					userResource.data?.user_type == 'System User' &&
+					userResource.data?.is_fc_site
+				"
+				:isSidebarCollapsed="sidebarStore.isSidebarCollapsed"
+			/>
+			<SidebarLink
+				:link="{
+					label: sidebarStore.isSidebarCollapsed ? 'Expand' : 'Collapse',
+				}"
+				:isCollapsed="sidebarStore.isSidebarCollapsed"
+				@click="toggleSidebar()"
+				class="m-2"
+			>
+				<template #icon>
+					<span class="grid h-5 w-6 flex-shrink-0 place-items-center">
+						<CollapseSidebar
+							class="h-4.5 w-4.5 text-ink-gray-7 duration-300 ease-in-out"
+							:class="{
+								'[transform:rotateY(180deg)]': sidebarStore.isSidebarCollapsed,
+							}"
+						/>
+					</span>
+				</template>
+			</SidebarLink>
+		</div>
 	</div>
 	<PageModal
 		v-model="showPageModal"
@@ -87,24 +107,43 @@ import { ref, onMounted, inject, watch } from 'vue'
 import { getSidebarLinks } from '../utils'
 import { usersStore } from '@/stores/user'
 import { sessionStore } from '@/stores/session'
-import { Plus } from 'lucide-vue-next'
-import { createResource, Button } from 'frappe-ui'
+import { useSidebar } from '@/stores/sidebar'
+import { useSettings } from '@/stores/settings'
+import { ChevronRight, Plus } from 'lucide-vue-next'
+import { Button, createResource, TrialBanner } from 'frappe-ui'
 import PageModal from '@/components/Modals/PageModal.vue'
 
-const { user } = sessionStore()
+const { user, sidebarSettings } = sessionStore()
 const { userResource } = usersStore()
+let sidebarStore = useSidebar()
 const socket = inject('$socket')
 const unreadCount = ref(0)
 const sidebarLinks = ref(getSidebarLinks())
 const showPageModal = ref(false)
 const isModerator = ref(false)
+const isInstructor = ref(false)
 const pageToEdit = ref(null)
+const settingsStore = useSettings()
 
 onMounted(() => {
 	socket.on('publish_lms_notifications', (data) => {
 		unreadNotifications.reload()
 	})
 	addNotifications()
+	sidebarSettings.reload(
+		{},
+		{
+			onSuccess(data) {
+				Object.keys(data).forEach((key) => {
+					if (!parseInt(data[key])) {
+						sidebarLinks.value = sidebarLinks.value.filter(
+							(link) => link.label.toLowerCase().split(' ').join('_') !== key
+						)
+					}
+				})
+			},
+		}
+	)
 })
 
 const unreadNotifications = createResource({
@@ -143,20 +182,58 @@ const addNotifications = () => {
 	}
 }
 
-const sidebarSettings = createResource({
-	url: 'lms.lms.api.get_sidebar_settings',
-	cache: 'Sidebar Settings',
-	auto: true,
-	onSuccess(data) {
-		Object.keys(data).forEach((key) => {
-			if (!parseInt(data[key])) {
-				sidebarLinks.value = sidebarLinks.value.filter(
-					(link) => link.label.toLowerCase().split(' ').join('_') !== key
-				)
-			}
+const addQuizzes = () => {
+	if (isInstructor.value || isModerator.value) {
+		sidebarLinks.value.push({
+			label: 'Quizzes',
+			icon: 'CircleHelp',
+			to: 'Quizzes',
+			activeFor: ['Quizzes', 'QuizForm'],
 		})
-	},
-})
+	}
+}
+
+const addAssignments = () => {
+	if (isInstructor.value || isModerator.value) {
+		sidebarLinks.value.push({
+			label: 'Assignments',
+			icon: 'Pencil',
+			to: 'Assignments',
+			activeFor: ['Assignments', 'AssignmentForm'],
+		})
+	}
+}
+
+const addPrograms = () => {
+	let activeFor = ['Programs', 'ProgramForm']
+	let index = 1
+	let canAddProgram = false
+
+	if (
+		!isInstructor.value &&
+		!isModerator.value &&
+		settingsStore.learningPaths.data
+	) {
+		sidebarLinks.value = sidebarLinks.value.filter(
+			(link) => link.label !== 'Courses'
+		)
+		activeFor.push('CourseDetail')
+		activeFor.push('Lesson')
+		index = 0
+		canAddProgram = true
+	} else if (isInstructor.value || isModerator.value) {
+		canAddProgram = true
+	}
+
+	if (canAddProgram) {
+		sidebarLinks.value.splice(index, 0, {
+			label: 'Programs',
+			icon: 'Route',
+			to: 'Programs',
+			activeFor: activeFor,
+		})
+	}
+}
 
 const openPageModal = (link) => {
 	showPageModal.value = true
@@ -188,8 +265,26 @@ const getSidebarFromStorage = () => {
 watch(userResource, () => {
 	if (userResource.data) {
 		isModerator.value = userResource.data.is_moderator
+		isInstructor.value = userResource.data.is_instructor
+		addPrograms()
+		addQuizzes()
+		addAssignments()
 	}
 })
 
-let isSidebarCollapsed = ref(getSidebarFromStorage())
+const toggleSidebar = () => {
+	sidebarStore.isSidebarCollapsed = !sidebarStore.isSidebarCollapsed
+	localStorage.setItem(
+		'isSidebarCollapsed',
+		JSON.stringify(sidebarStore.isSidebarCollapsed)
+	)
+}
+
+const toggleWebPages = () => {
+	sidebarStore.isWebpagesCollapsed = !sidebarStore.isWebpagesCollapsed
+	localStorage.setItem(
+		'isWebpagesCollapsed',
+		JSON.stringify(sidebarStore.isWebpagesCollapsed)
+	)
+}
 </script>

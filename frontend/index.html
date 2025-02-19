@@ -2,7 +2,7 @@
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
-		<link rel="icon" href="/favicon.png" />
+		<link rel="icon" href="{{ favicon or '/assets/lms/frontend/favicon.png' }}" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Frappe Learning</title>
 		<meta name="title" content="{{ meta.title }}" />
@@ -42,6 +42,7 @@
 
 		<script>
 			window.csrf_token = '{{ csrf_token }}'
+			window.setup_complete = '{{ setup_complete }}'
 			document.getElementById('seo-content').style.display = 'none';
 		</script>
 		<script type="module" src="/src/main.js"></script>

@@ -16,6 +16,10 @@ class CustomUser(User):
 		super().validate()
 		self.validate_username_duplicates()
 
+	def after_insert(self):
+		super().after_insert()
+		self.add_roles("LMS Student")
+
 	def validate_username_duplicates(self):
 		while not self.username or self.username_exists():
 			self.username = append_number_if_name_exists(

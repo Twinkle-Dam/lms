@@ -2,6 +2,7 @@
 	<div class="space-y-1.5">
 		<label class="block" :class="labelClasses" v-if="attrs.label">
 			{{ attrs.label }}
+			<span class="text-ink-red-3" v-if="attrs.required">*</span>
 		</label>
 		<Autocomplete
 			ref="autocomplete"
@@ -28,8 +29,8 @@
 				<slot name="item-label" v-bind="{ active, selected, option }" />
 			</template>
 
-			<template v-if="attrs.onCreate" #footer="{ value, close }">
-				<div>
+			<template #footer="{ value, close }">
+				<div v-if="attrs.onCreate">
 					<Button
 						variant="ghost"
 						class="w-full !justify-start"
@@ -41,8 +42,21 @@
 						</template>
 					</Button>
 				</div>
+				<div>
+					<Button
+						variant="ghost"
+						class="w-full !justify-start"
+						:label="__('Clear')"
+						@click="() => clearValue(close)"
+					>
+						<template #prefix>
+							<X class="h-4 w-4 stroke-1.5" />
+						</template>
+					</Button>
+				</div>
 			</template>
 		</Autocomplete>
+		<p v-if="description" class="text-sm text-ink-gray-5">{{ description }}</p>
 	</div>
 </template>
 
@@ -50,7 +64,7 @@
 import Autocomplete from '@/components/Controls/Autocomplete.vue'
 import { watchDebounced } from '@vueuse/core'
 import { createResource, Button } from 'frappe-ui'
-import { Plus } from 'lucide-vue-next'
+import { Plus, X } from 'lucide-vue-next'
 import { useAttrs, computed, ref } from 'vue'
 
 const props = defineProps({
@@ -66,12 +80,14 @@ const props = defineProps({
 		type: String,
 		default: '',
 	},
+	description: {
+		type: String,
+		default: '',
+	},
 })
 
 const emit = defineEmits(['update:modelValue', 'change'])
-
 const attrs = useAttrs()
-
 const valuePropPassed = computed(() => 'value' in attrs)
 
 const value = computed({
@@ -108,6 +124,7 @@ const options = createResource({
 	url: 'frappe.desk.search.search_link',
 	cache: [props.doctype, text.value],
 	method: 'POST',
+	auto: true,
 	params: {
 		txt: text.value,
 		doctype: props.doctype,
@@ -116,14 +133,15 @@ const options = createResource({
 	transform: (data) => {
 		return data.map((option) => {
 			return {
-				label: option.value,
+				label: option.label || option.value,
 				value: option.value,
+				description: option.description,
 			}
 		})
 	},
 })
 
-function reload(val) {
+const reload = (val) => {
 	options.update({
 		params: {
 			txt: val,
@@ -134,13 +152,18 @@ function reload(val) {
 	options.reload()
 }
 
+const clearValue = (close) => {
+	emit(valuePropPassed.value ? 'change' : 'update:modelValue', '')
+	close()
+}
+
 const labelClasses = computed(() => {
 	return [
 		{
 			sm: 'text-xs',
 			md: 'text-base',
 		}[attrs.size || 'sm'],
-		'text-gray-600',
+		'text-ink-gray-5',
 	]
 })
 </script>

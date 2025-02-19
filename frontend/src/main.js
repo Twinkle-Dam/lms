@@ -1,21 +1,14 @@
 import './index.css'
-
 import { createApp } from 'vue'
 import router from './router'
 import App from './App.vue'
 import { createPinia } from 'pinia'
 import dayjs from '@/utils/dayjs'
+import { createDialog } from '@/utils/dialogs'
 import translationPlugin from './translation'
 import { usersStore } from './stores/user'
-import { sessionStore } from './stores/session'
 import { initSocket } from './socket'
-import {
-	FrappeUI,
-	setConfig,
-	frappeRequest,
-	resourcesPlugin,
-	pageMetaPlugin,
-} from 'frappe-ui'
+import { FrappeUI, setConfig, frappeRequest, pageMetaPlugin } from 'frappe-ui'
 
 let pinia = createPinia()
 let app = createApp(App)
@@ -31,8 +24,7 @@ app.provide('$socket', initSocket())
 app.mount('#app')
 
 const { userResource, allUsers } = usersStore()
-let { isLoggedIn } = sessionStore()
-
 app.provide('$user', userResource)
 app.provide('$allUsers', allUsers)
 app.config.globalProperties.$user = userResource
+app.config.globalProperties.$dialog = createDialog

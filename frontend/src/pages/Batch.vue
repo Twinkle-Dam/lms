@@ -1,26 +1,42 @@
 <template>
 	<div v-if="user.data?.is_moderator || isStudent" class="">
 		<header
-			class="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-3 py-2.5 sm:px-5"
+			class="sticky top-0 z-10 flex items-center justify-between border-b bg-surface-white px-3 py-2.5 sm:px-5"
 		>
 			<Breadcrumbs class="h-7" :items="breadcrumbs" />
-			<Button v-if="user.data?.is_moderator" @click="openAnnouncementModal()">
-				<span>
-					{{ __('Make an Announcement') }}
-				</span>
-				<template #suffix>
-					<SendIcon class="h-4 stroke-1.5" />
-				</template>
-			</Button>
+			<div class="flex items-center space-x-2">
+				<Button
+					v-if="user.data?.is_moderator && batch.data?.certification"
+					@click="openCertificateDialog = true"
+				>
+					{{ __('Generate Certificates') }}
+				</Button>
+				<Button v-if="user.data?.is_moderator" @click="openAnnouncementModal()">
+					<span>
+						{{ __('Make an Announcement') }}
+					</span>
+					<template #suffix>
+						<SendIcon class="h-4 stroke-1.5" />
+					</template>
+				</Button>
+			</div>
 		</header>
-		<div v-if="batch.data" class="grid grid-cols-[70%,30%] h-screen">
-			<div class="border-r-2">
-				<Tabs v-model="tabIndex" :tabs="tabs" tablistClass="overflow-y-hidden">
+		<div
+			v-if="batch.data"
+			class="grid grid-cols-[75%,25%] h-[calc(100vh-3.2rem)]"
+		>
+			<div class="border-r">
+				<Tabs
+					v-model="tabIndex"
+					as="div"
+					:tabs="tabs"
+					tablistClass="overflow-y-hidden bg-surface-white"
+				>
 					<template #tab="{ tab, selected }" class="overflow-x-hidden">
 						<div>
 							<button
-								class="group -mb-px flex items-center gap-1 border-b border-transparent py-2.5 text-base text-gray-600 duration-300 ease-in-out hover:border-gray-400 hover:text-gray-900"
-								:class="{ 'text-gray-900': selected }"
+								class="group -mb-px flex items-center gap-1 border-b border-transparent py-2.5 text-base text-ink-gray-5 duration-300 ease-in-out hover:border-outline-gray-3 hover:text-ink-gray-9"
+								:class="{ 'text-ink-gray-9': selected }"
 							>
 								<component
 									v-if="tab.icon"
@@ -31,7 +47,7 @@
 								<Badge
 									v-if="tab.count"
 									:class="{
-										'text-gray-900 border border-gray-900': selected,
+										'text-ink-gray-9 border border-gray-900': selected,
 									}"
 									variant="subtle"
 									theme="gray"
@@ -42,19 +58,19 @@
 							</button>
 						</div>
 					</template>
-					<template #default="{ tab }">
+					<template #tab-panel="{ tab }">
 						<div class="pt-5 px-5 pb-10">
 							<div v-if="tab.label == 'Courses'">
 								<BatchCourses :batch="batch.data.name" />
 							</div>
-							<div v-else-if="tab.label == 'Dashboard'">
+							<div v-else-if="tab.label == 'Dashboard' && isStudent">
 								<BatchDashboard :batch="batch" :isStudent="isStudent" />
 							</div>
-							<div v-else-if="tab.label == 'Live Class'">
-								<LiveClass :batch="batch.data.name" />
+							<div v-else-if="tab.label == 'Dashboard'">
+								<BatchStudents :batch="batch.data" />
 							</div>
-							<div v-else-if="tab.label == 'Students'">
-								<BatchStudents :batch="batch.data.name" />
+							<div v-else-if="tab.label == 'Classes'">
+								<LiveClass :batch="batch.data.name" />
 							</div>
 							<div v-else-if="tab.label == 'Assessments'">
 								<Assessments :batch="batch.data.name" />
@@ -69,20 +85,26 @@
 									:title="__('Discussions')"
 									:key="batch.data.name"
 									:singleThread="true"
-									:scrollToBottom="true"
+									:scrollToBottom="false"
 								/>
+							</div>
+							<div v-else-if="tab.label == 'Feedback'">
+								<BatchFeedback :batch="batch.data.name" />
 							</div>
 						</div>
 					</template>
 				</Tabs>
 			</div>
 			<div class="p-5">
-				<div class="text-2xl font-semibold mb-2">
-					{{ batch.data.title }}
+				<div class="text-ink-gray-7 font-semibold mb-4">
+					{{ __('About this batch') }}:
 				</div>
-				<div v-html="batch.data.description" class="leading-5 mb-2"></div>
+				<div
+					v-html="batch.data.description"
+					class="leading-5 mb-4 text-ink-gray-7"
+				></div>
 
-				<div class="flex avatar-group overlap mb-5">
+				<div class="flex items-center avatar-group overlap mb-5">
 					<div
 						class="h-6 mr-1"
 						:class="{
@@ -101,15 +123,18 @@
 					:endDate="batch.data.end_date"
 					class="mb-3"
 				/>
-				<div class="flex items-center mb-4">
-					<Clock class="h-4 w-4 stroke-1.5 mr-2 text-gray-700" />
+				<div class="flex items-center mb-4 text-ink-gray-7">
+					<Clock class="h-4 w-4 stroke-1.5 mr-2" />
 					<span>
 						{{ formatTime(batch.data.start_time) }} -
 						{{ formatTime(batch.data.end_time) }}
 					</span>
 				</div>
-				<div v-if="batch.data.timezone" class="flex items-center mb-4">
-					<Globe class="h-4 w-4 stroke-1.5 mr-2 text-gray-700" />
+				<div
+					v-if="batch.data.timezone"
+					class="flex items-center mb-4 text-ink-gray-7"
+				>
+					<Globe class="h-4 w-4 stroke-1.5 mr-2" />
 					<span>
 						{{ batch.data.timezone }}
 					</span>
@@ -126,7 +151,7 @@
 		<div class="text-base border rounded-md w-1/3 mx-auto my-32">
 			<div class="border-b px-5 py-3 font-medium">
 				<span
-					class="inline-flex items-center before:bg-red-600 before:w-2 before:h-2 before:rounded-md before:mr-2"
+					class="inline-flex items-center before:bg-surface-red-5 before:w-2 before:h-2 before:rounded-md before:mr-2"
 				></span>
 				{{ __('Not Permitted') }}
 			</div>
@@ -165,6 +190,7 @@
 			</div>
 		</div>
 	</div>
+	<BulkCertificates v-model="openCertificateDialog" :batch="batch.data" />
 </template>
 <script setup>
 import { Breadcrumbs, Button, createResource, Tabs, Badge } from 'frappe-ui'
@@ -177,13 +203,13 @@ import {
 	BookOpen,
 	Laptop,
 	BookOpenCheck,
-	Contact2,
 	Mail,
 	SendIcon,
 	MessageCircle,
 	Globe,
+	ClipboardPen,
 } from 'lucide-vue-next'
-import { formatTime } from '@/utils'
+import { formatTime, updateDocumentTitle } from '@/utils'
 import BatchDashboard from '@/components/BatchDashboard.vue'
 import BatchCourses from '@/components/BatchCourses.vue'
 import LiveClass from '@/components/LiveClass.vue'
@@ -193,9 +219,12 @@ import Announcements from '@/components/Annoucements.vue'
 import AnnouncementModal from '@/components/Modals/AnnouncementModal.vue'
 import Discussions from '@/components/Discussions.vue'
 import DateRange from '@/components/Common/DateRange.vue'
+import BulkCertificates from '@/components/Modals/BulkCertificates.vue'
+import BatchFeedback from '@/components/BatchFeedback.vue'
 
 const user = inject('$user')
 const showAnnouncementModal = ref(false)
+const openCertificateDialog = ref(false)
 
 const props = defineProps({
 	batchName: {
@@ -214,7 +243,7 @@ const batch = createResource({
 })
 
 const breadcrumbs = computed(() => {
-	let crumbs = [{ label: 'All Batches', route: { name: 'Batches' } }]
+	let crumbs = [{ label: 'Batches', route: { name: 'Batches' } }]
 	if (!isStudent.value) {
 		crumbs.push({
 			label: 'Details',
@@ -236,7 +265,7 @@ const breadcrumbs = computed(() => {
 const isStudent = computed(() => {
 	return (
 		user?.data &&
-		batch.data?.students.length &&
+		batch.data?.students?.length &&
 		batch.data?.students.includes(user.data.name)
 	)
 })
@@ -244,46 +273,59 @@ const isStudent = computed(() => {
 const tabIndex = ref(0)
 const tabs = computed(() => {
 	let batchTabs = []
-	if (isStudent.value) {
-		batchTabs.push({
-			label: 'Dashboard',
-			icon: LayoutDashboard,
-		})
-	}
+	batchTabs.push({
+		label: 'Dashboard',
+		icon: LayoutDashboard,
+	})
+
+	batchTabs.push({
+		label: 'Courses',
+		icon: BookOpen,
+	})
+
+	batchTabs.push({
+		label: 'Classes',
+		icon: Laptop,
+	})
+
 	if (user.data?.is_moderator) {
-		batchTabs.push({
-			label: 'Students',
-			icon: Contact2,
-		})
 		batchTabs.push({
 			label: 'Assessments',
 			icon: BookOpenCheck,
 		})
 	}
-	batchTabs.push({
-		label: 'Live Class',
-		icon: Laptop,
-	})
-	batchTabs.push({
-		label: 'Courses',
-		icon: BookOpen,
-	})
+
 	batchTabs.push({
 		label: 'Announcements',
 		icon: Mail,
 	})
+
 	batchTabs.push({
 		label: 'Discussions',
 		icon: MessageCircle,
+	})
+
+	batchTabs.push({
+		label: 'Feedback',
+		icon: ClipboardPen,
 	})
 	return batchTabs
 })
 
 const redirectToLogin = () => {
-	window.location.href = `/login?redirect-to=/batches`
+	window.location.href = `/login?redirect-to=/lms/batches/${props.batchName}`
 }
 
 const openAnnouncementModal = () => {
 	showAnnouncementModal.value = true
 }
+
+const pageMeta = computed(() => {
+	return {
+		title: batch.data?.title,
+		description: batch.data?.description,
+	}
+})
+
+updateDocumentTitle(pageMeta)
 </script>

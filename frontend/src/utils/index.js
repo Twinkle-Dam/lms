@@ -1,7 +1,9 @@
 import { toast } from 'frappe-ui'
 import { useTimeAgo } from '@vueuse/core'
 import { Quiz } from '@/utils/quiz'
+import { Assignment } from '@/utils/assignment'
 import { Upload } from '@/utils/upload'
+import { Markdown } from '@/utils/markdownParser'
 import Header from '@editorjs/header'
 import Paragraph from '@editorjs/paragraph'
 import { CodeBox } from '@/utils/code'
@@ -10,6 +12,8 @@ import InlineCode from '@editorjs/inline-code'
 import { watch } from 'vue'
 import dayjs from '@/utils/dayjs'
 import Embed from '@editorjs/embed'
+import SimpleImage from '@editorjs/simple-image'
+import Table from '@editorjs/table'
 
 export function createToast(options) {
 	toast({
@@ -56,6 +60,15 @@ export function formatNumberIntoCurrency(number, currency) {
 	return ''
 }
 
+// create a function that formats numbers in thousands to k
+
+export function formatAmount(amount) {
+	if (amount > 999) {
+		return (amount / 1000).toFixed(1) + 'k'
+	}
+	return amount
+}
+
 export function convertToTitleCase(str) {
 	if (!str) {
 		return ''
@@ -79,15 +92,21 @@ export function getFileSize(file_size) {
 	return value
 }
 
-export function showToast(title, text, icon) {
+export function showToast(title, text, icon, iconClasses = null) {
+	if (!iconClasses) {
+		if (icon == 'check') {
+			iconClasses = 'bg-surface-green-3 text-ink-white rounded-md p-px'
+		} else if (icon == 'alert-circle') {
+			iconClasses = 'bg-yellow-600 text-ink-white rounded-md p-px'
+		} else {
+			iconClasses = 'bg-surface-red-5 text-ink-white rounded-md p-px'
+		}
+	}
 	createToast({
 		title: title,
 		text: htmlToText(text),
 		icon: icon,
-		iconClasses:
-			icon == 'check'
-				? 'bg-green-600 text-white rounded-md p-px'
-				: 'bg-red-600 text-white rounded-md p-px',
+		iconClasses: iconClasses,
 		position: icon == 'check' ? 'bottom-right' : 'top-center',
 		timeout: 5,
 	})
@@ -130,9 +149,21 @@ export function htmlToText(html) {
 
 export function getEditorTools() {
 	return {
-		header: Header,
+		header: {
+			class: Header,
+			config: {
+				placeholder: 'Header',
+			},
+		},
 		quiz: Quiz,
+		assignment: Assignment,
 		upload: Upload,
+		markdown: Markdown,
+		image: SimpleImage,
+		table: {
+			class: Table,
+			inlineToolbar: true,
+		},
 		paragraph: {
 			class: Paragraph,
 			inlineToolbar: true,
@@ -144,13 +175,14 @@ export function getEditorTools() {
 			class: CodeBox,
 			config: {
 				themeURL:
-					'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/styles/dracula.min.css', // Optional
-				themeName: 'atom-one-dark', // Optional
-				useDefaultTheme: 'dark', // Optional. This also determines the background color of the language select drop-down
+					'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.1/build/styles/atom-one-dark.min.css',
+				themeName: 'atom-one-dark',
+				useDefaultTheme: 'dark',
 			},
 		},
 		list: {
 			class: NestedList,
+			inlineToolbar: true,
 			config: {
 				defaultStyle: 'ordered',
 			},
@@ -164,16 +196,74 @@ export function getEditorTools() {
 			inlineToolbar: false,
 			config: {
 				services: {
-					youtube: true,
+					youtube: {
+						regex: /(?:https?:\/\/)?(?:www\.)?(?:(?:youtu\.be\/)|(?:youtube\.com)\/(?:v\/|u\/\w\/|embed\/|watch))(?:(?:\?v=)?([^#&?=]*))?((?:[?&]\w*=\w*)*)/,
+						embedUrl:
+							'https://www.youtube.com/embed/<%= remote_id %>',
+						html: '<iframe style="width:100%; height: 30rem;" frameborder="0" allowfullscreen></iframe>',
+						height: 320,
+						width: 580,
+						id: ([id, params]) => {
+							if (!params && id) {
+								return id
+							}
+
+							const paramsMap = {
+								start: 'start',
+								end: 'end',
+								t: 'start',
+								// eslint-disable-next-line camelcase
+								time_continue: 'start',
+								list: 'list',
+							}
+
+							let newParams = params
+								.slice(1)
+								.split('&')
+								.map((param) => {
+									const [name, value] = param.split('=')
+
+									if (!id && name === 'v') {
+										id = value
+
+										return null
+									}
+
+									if (!paramsMap[name]) {
+										return null
+									}
+
+									if (
+										value === 'LL' ||
+										value.startsWith('RDMM') ||
+										value.startsWith('FL')
+									) {
+										return null
+									}
+
+									return `${paramsMap[name]}=${value}`
+								})
+								.filter((param) => !!param)
+
+							return id + '?' + newParams.join('&')
+						},
+					},
 					vimeo: true,
 					codepen: true,
-					aparat: true,
+					aparat: {
+						regex: /(?:http[s]?:\/\/)?(?:www.)?aparat\.com\/v\/([^\/\?\&]+)\/?/,
+						embedUrl:
+							'https://www.aparat.com/video/video/embed/videohash/<%= remote_id %>/vt/frame',
+						html: '<iframe style="margin: 0 auto; width: 100%; height: 25rem;" frameborder="0" scrolling="no" allowtransparency="true"></iframe>',
+						height: 300,
+						width: 600,
+					},
 					github: true,
 					slides: {
-						regex: /https:\/\/docs\.google\.com\/presentation\/d\/e\/([A-Za-z0-9_-]+)\/pub/,
+						regex: /https:\/\/docs\.google\.com\/presentation\/d\/([A-Za-z0-9_-]+)\/pub/,
 						embedUrl:
-							'https://docs.google.com/presentation/d/e/<%= remote_id %>/embed',
-						html: "<iframe style='width: 100%; height: 30rem; border: 1px solid #D3D3D3; border-radius: 12px;' frameborder='0' allowfullscreen='true'></iframe>",
+							'https://docs.google.com/presentation/d/<%= remote_id %>/embed',
+						html: "<iframe style='width: 100%; height: 30rem; border: 1px solid #D3D3D3; border-radius: 12px; margin: 1rem 0' frameborder='0' allowfullscreen='true'></iframe>",
 					},
 					drive: {
 						regex: /https:\/\/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)\/view(\?.+)?/,
@@ -197,7 +287,7 @@ export function getEditorTools() {
 						regex: /https:\/\/docs\.google\.com\/presentation\/d\/([A-Za-z0-9_-]+)\/edit(\?.+)?/,
 						embedUrl:
 							'https://docs.google.com/presentation/d/<%= remote_id %>/embed',
-						html: "<iframe style='width: 100%; height: 30rem; border: 1px solid #D3D3D3; border-radius: 12px;' frameborder='0' allowfullscreen='true'></iframe>",
+						html: "<iframe style='width: 100%; height: 30rem; border: 1px solid #D3D3D3; border-radius: 12px; margin: 1rem 0;' frameborder='0' allowfullscreen='true'></iframe>",
 					},
 					codesandbox: {
 						regex: /^https:\/\/codesandbox\.io\/(?:embed\/)?([A-Za-z0-9_-]+)(?:\?[^\/]*)?$/,
@@ -357,13 +447,19 @@ export function getSidebarLinks() {
 			label: 'Courses',
 			icon: 'BookOpen',
 			to: 'Courses',
-			activeFor: ['Courses', 'CourseDetail', 'Lesson'],
+			activeFor: [
+				'Courses',
+				'CourseDetail',
+				'Lesson',
+				'CourseForm',
+				'LessonForm',
+			],
 		},
 		{
 			label: 'Batches',
 			icon: 'Users',
 			to: 'Batches',
-			activeFor: ['Batches', 'BatchDetail', 'Batch'],
+			activeFor: ['Batches', 'BatchDetail', 'Batch', 'BatchForm'],
 		},
 		{
 			label: 'Certified Participants',
@@ -413,4 +509,45 @@ export function getLineStartPosition(string, position) {
 	}
 
 	return position
+}
+
+export function singularize(word) {
+	const endings = {
+		ves: 'fe',
+		ies: 'y',
+		i: 'us',
+		zes: 'ze',
+		ses: 's',
+		es: 'e',
+		s: '',
+	}
+	return word.replace(
+		new RegExp(`(${Object.keys(endings).join('|')})$`),
+		(r) => endings[r]
+	)
+}
+
+export const validateFile = (file) => {
+	let extension = file.name.split('.').pop().toLowerCase()
+	if (!['jpg', 'jpeg', 'png', 'webp'].includes(extension)) {
+		return __('Only image file is allowed.')
+	}
+}
+
+export const escapeHTML = (text) => {
+	if (!text) return ''
+	let escape_html_mapping = {
+		'&': '&amp;',
+		'<': '&lt;',
+		'>': '&gt;',
+		'"': '&quot;',
+		"'": '&#39;',
+		'`': '&#x60;',
+		'=': '&#x3D;',
+	}
+
+	return String(text).replace(
+		/[&<>"'`=]/g,
+		(char) => escape_html_mapping[char] || char
+	)
 }

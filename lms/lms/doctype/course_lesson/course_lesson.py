@@ -24,9 +24,6 @@ class CourseLesson(Document):
 		for section in dynamic_documents:
 			self.update_lesson_name_in_document(section)
 
-	def after_insert(self):
-		capture("lesson_created", "lms")
-
 	def update_lesson_name_in_document(self, section):
 		doctype_map = {"Exercise": "LMS Exercise", "Quiz": "LMS Quiz"}
 		macros = find_macros(self.body)
@@ -55,7 +52,6 @@ class CourseLesson(Document):
 			ex.lesson = None
 			ex.course = None
 			ex.index_ = 0
-			ex.index_label = ""
 			ex.save(ignore_permissions=True)
 
 	def check_and_create_folder(self):
@@ -76,16 +72,6 @@ class CourseLesson(Document):
 		exercises = [value for name, value in macros if name == "Exercise"]
 		return [frappe.get_doc("LMS Exercise", name) for name in exercises]
 
-	def get_progress(self):
-		return frappe.db.get_value(
-			"LMS Course Progress", {"lesson": self.name, "owner": frappe.session.user}, "status"
-		)
-
-	def get_slugified_class(self):
-		if self.get_progress():
-			return ("").join([s for s in self.get_progress().lower().split()])
-		return
-
 
 @frappe.whitelist()
 def save_progress(lesson, course):
@@ -96,30 +82,38 @@ def save_progress(lesson, course):
 		return 0
 
 	frappe.db.set_value("LMS Enrollment", membership, "current_lesson", lesson)
+	already_completed = frappe.db.exists(
+		"LMS Course Progress", {"lesson": lesson, "member": frappe.session.user}
+	)
 
 	quiz_completed = get_quiz_progress(lesson)
-	if not quiz_completed:
-		return 0
+	assignment_completed = get_assignment_progress(lesson)
 
-	if frappe.db.exists(
-		"LMS Course Progress", {"lesson": lesson, "member": frappe.session.user}
-	):
-		return 0
-
-	frappe.get_doc(
-		{
-			"doctype": "LMS Course Progress",
-			"lesson": lesson,
-			"status": "Complete",
-			"member": frappe.session.user,
-		}
-	).save(ignore_permissions=True)
+	if not already_completed and quiz_completed and assignment_completed:
+		frappe.get_doc(
+			{
+				"doctype": "LMS Course Progress",
+				"lesson": lesson,
+				"status": "Complete",
+				"member": frappe.session.user,
+			}
+		).save(ignore_permissions=True)
 
 	progress = get_course_progress(course)
-	frappe.db.set_value("LMS Enrollment", membership, "progress", progress)
+	capture_progress_for_analytics(progress, course)
+
+	# Had to get doc, as on_change doesn't trigger when you use set_value. The trigger is necesary for badge to get assigned.
 	enrollment = frappe.get_doc("LMS Enrollment", membership)
+	enrollment.progress = progress
+	enrollment.save()
 	enrollment.run_method("on_change")
+
 	return progress
+
+
+def capture_progress_for_analytics(progress, course):
+	if progress in [25, 50, 75, 100]:
+		capture("course_progress", "lms", properties={"course": course, "progress": progress})
 
 
 def get_quiz_progress(lesson):
@@ -140,20 +134,7 @@ def get_quiz_progress(lesson):
 		quizzes = [value for name, value in macros if name == "Quiz"]
 
 	for quiz in quizzes:
-		print(quiz)
 		passing_percentage = frappe.db.get_value("LMS Quiz", quiz, "passing_percentage")
-		print(frappe.session.user)
-		print(passing_percentage)
-		print(
-			frappe.db.exists(
-				"LMS Quiz Submission",
-				{
-					"quiz": quiz,
-					"member": frappe.session.user,
-					"percentage": [">=", passing_percentage],
-				},
-			)
-		)
 		if not frappe.db.exists(
 			"LMS Quiz Submission",
 			{
@@ -162,7 +143,32 @@ def get_quiz_progress(lesson):
 				"percentage": [">=", passing_percentage],
 			},
 		):
-			print("no submission")
+			return False
+	return True
+
+
+def get_assignment_progress(lesson):
+	lesson_details = frappe.db.get_value(
+		"Course Lesson", lesson, ["body", "content"], as_dict=1
+	)
+	assignments = []
+
+	if lesson_details.content:
+		content = json.loads(lesson_details.content)
+
+		for block in content.get("blocks"):
+			if block.get("type") == "assignment":
+				assignments.append(block.get("data").get("assignment"))
+
+	elif lesson_details.body:
+		macros = find_macros(lesson_details.body)
+		assignments = [value for name, value in macros if name == "Assignment"]
+
+	for assignment in assignments:
+		if not frappe.db.exists(
+			"LMS Assignment Submission",
+			{"assignment": assignment, "member": frappe.session.user},
+		):
 			return False
 	return True
 
