@@ -1,132 +1,316 @@
 <template>
-	<div class="">
-		<header
-			class="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-3 py-2.5 sm:px-5"
+	<header
+		class="sticky flex items-center justify-between top-0 z-10 border-b bg-surface-white px-3 py-2.5 sm:px-5"
+	>
+		<Breadcrumbs :items="breadcrumbs" />
+		<router-link
+			v-if="user.data?.is_moderator"
+			:to="{
+				name: 'BatchForm',
+				params: { batchName: 'new' },
+			}"
 		>
-			<Breadcrumbs
-				class="h-7"
-				:items="[{ label: __('All Batches'), route: { name: 'Batches' } }]"
-			/>
-			<div class="flex">
-				<router-link
-					v-if="user.data?.is_moderator"
-					:to="{
-						name: 'BatchCreation',
-						params: { batchName: 'new' },
-					}"
-				>
-					<Button variant="solid">
-						<template #prefix>
-							<Plus class="h-4 w-4" />
-						</template>
-						{{ __('New Batch') }}
-					</Button>
-				</router-link>
+			<Button variant="solid">
+				<template #prefix>
+					<Plus class="h-4 w-4 stroke-1.5" />
+				</template>
+				{{ __('New') }}
+			</Button>
+		</router-link>
+	</header>
+	<div class="p-5 pb-10">
+		<div
+			class="flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:items-center justify-between mb-5"
+		>
+			<div class="text-lg font-semibold">
+				{{ __('All Batches') }}
 			</div>
-		</header>
-		<div v-if="batches.data" class="pb-5">
 			<div
-				v-if="batches.data.length == 0 && batches.list.loading"
-				class="p-5 text-base text-gray-700"
+				class="flex flex-col space-y-2 lg:space-y-0 lg:flex-row lg:items-center lg:space-x-4"
 			>
-				{{ __('Loading Batches...') }}
+				<TabButtons
+					v-if="user.data"
+					:buttons="batchTabs"
+					v-model="currentTab"
+				/>
+				<FormControl
+					v-model="certification"
+					:label="__('Certification')"
+					type="checkbox"
+					@change="updateBatches()"
+				/>
+				<div class="grid grid-cols-2 gap-2">
+					<FormControl
+						v-model="title"
+						:placeholder="__('Search by Title')"
+						type="text"
+						class="min-w-40 lg:min-w-0 lg:w-32 xl:w-40"
+						@input="updateBatches()"
+					/>
+					<div class="min-w-40 lg:min-w-0 lg:w-32 xl:w-40">
+						<Select
+							v-if="categories.length"
+							v-model="currentCategory"
+							:options="categories"
+							:placeholder="__('Category')"
+							@change="updateBatches()"
+						/>
+					</div>
+				</div>
 			</div>
-			<Tabs
-				v-model="tabIndex"
-				:tabs="tabs"
-				tablistClass="overflow-x-visible flex-wrap !gap-3 md:flex-nowrap"
+		</div>
+		<div
+			v-if="batches.data?.length"
+			class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
+		>
+			<router-link
+				v-for="batch in batches.data"
+				:to="{ name: 'BatchDetail', params: { batchName: batch.name } }"
 			>
-				<template #tab="{ tab, selected }">
-					<div>
-						<button
-							class="group -mb-px flex items-center gap-2 border-b border-transparent py-2.5 text-base text-gray-600 duration-300 ease-in-out hover:border-gray-400 hover:text-gray-900"
-							:class="{ 'text-gray-900': selected }"
-						>
-							<component v-if="tab.icon" :is="tab.icon" class="h-5" />
-							{{ __(tab.label) }}
-							<Badge
-								:class="
-									selected
-										? 'text-gray-800 border border-gray-800'
-										: 'border border-gray-500'
-								"
-								variant="subtle"
-								theme="gray"
-								size="sm"
-							>
-								{{ tab.count }}
-							</Badge>
-						</button>
-					</div>
-				</template>
-				<template #default="{ tab }">
-					<div
-						v-if="tab.batches && tab.batches.value.length"
-						class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 m-5"
-					>
-						<router-link
-							v-for="batch in tab.batches.value"
-							:to="{ name: 'BatchDetail', params: { batchName: batch.name } }"
-						>
-							<BatchCard :batch="batch" />
-						</router-link>
-					</div>
-					<div
-						v-else
-						class="grid flex-1 place-items-center text-xl font-medium text-gray-500"
-					>
-						<div class="flex flex-col items-center justify-center mt-4">
-							<div>
-								{{ __('No {0} batches found').format(tab.label.toLowerCase()) }}
-							</div>
-						</div>
-					</div>
-				</template>
-			</Tabs>
+				<BatchCard :batch="batch" />
+			</router-link>
+		</div>
+		<div
+			v-else-if="!batches.list.loading"
+			class="flex flex-col items-center justify-center text-sm text-ink-gray-5 italic mt-48"
+		>
+			<BookOpen class="size-10 mx-auto stroke-1 text-ink-gray-4" />
+			<div class="text-lg font-medium mb-1">
+				{{ __('No batches found') }}
+			</div>
+			<div class="leading-5 w-2/5 text-center">
+				{{
+					__(
+						'There are no batches matching the criteria. Keep an eye out, fresh learning experiences are on the way soon!'
+					)
+				}}
+			</div>
+		</div>
+		<div
+			v-if="!batches.list.loading && batches.hasNextPage"
+			class="flex justify-center mt-5"
+		>
+			<Button @click="batches.next()">
+				{{ __('Load More') }}
+			</Button>
 		</div>
 	</div>
 </template>
 <script setup>
-import { createListResource, Breadcrumbs, Button, Tabs, Badge } from 'frappe-ui'
-import { Plus } from 'lucide-vue-next'
+import {
+	Breadcrumbs,
+	Button,
+	createListResource,
+	FormControl,
+	Select,
+	TabButtons,
+} from 'frappe-ui'
+import { computed, inject, onMounted, ref, watch } from 'vue'
+import { BookOpen, Plus } from 'lucide-vue-next'
+import { updateDocumentTitle } from '@/utils'
 import BatchCard from '@/components/BatchCard.vue'
-import { inject, ref, computed } from 'vue'
 
 const user = inject('$user')
+const dayjs = inject('$dayjs')
+const start = ref(0)
+const pageLength = ref(20)
+const categories = ref([])
+const currentCategory = ref(null)
+const title = ref('')
+const certification = ref(false)
+const filters = ref({})
+const currentTab = ref(user.data?.is_student ? 'All' : 'Upcoming')
+const orderBy = ref('start_date')
+
+onMounted(() => {
+	setFiltersFromQuery()
+	updateBatches()
+	categories.value = [
+		{
+			label: '',
+			value: null,
+		},
+	]
+})
+
+const setFiltersFromQuery = () => {
+	let queries = new URLSearchParams(location.search)
+	title.value = queries.get('title') || ''
+	currentCategory.value = queries.get('category') || null
+	certification.value = queries.get('certification') || false
+}
 
 const batches = createListResource({
 	doctype: 'LMS Batch',
 	url: 'lms.lms.utils.get_batches',
-	cache: ['batches', user?.data?.email],
-	auto: true,
+	cache: ['batches', user.data?.name],
+	pageLength: pageLength.value,
+	start: start.value,
+	onSuccess(data) {
+		let allCategories = data.map((batch) => batch.category)
+		allCategories = allCategories.filter(
+			(category, index) => allCategories.indexOf(category) === index && category
+		)
+		if (categories.value.length <= allCategories.length) {
+			updateCategories(data)
+		}
+	},
 })
 
-const tabIndex = ref(0)
-const tabs = [
-	{
-		label: 'Upcoming',
-		batches: computed(() => batches.data?.upcoming || []),
-		count: computed(() => batches.data?.upcoming?.length),
-	},
-]
+const updateBatches = () => {
+	updateFilters()
+	batches.update({
+		filters: filters.value,
+		orderBy: orderBy.value,
+	})
+	batches.reload()
+}
 
-if (user.data?.is_moderator) {
-	tabs.push({
-		label: 'Archived',
-		batches: computed(() => batches.data?.archived),
-		count: computed(() => batches.data?.archived?.length),
+const updateFilters = () => {
+	updateCategoryFilter()
+	updateTitleFilter()
+	updateCertificationFilter()
+	updateTabFilter()
+	updateStudentFilter()
+	setQueryParams()
+}
+
+const updateCategoryFilter = () => {
+	if (currentCategory.value) {
+		filters.value['category'] = currentCategory.value
+	} else {
+		delete filters.value['category']
+	}
+}
+
+const updateTitleFilter = () => {
+	if (title.value) {
+		filters.value['title'] = ['like', `%${title.value}%`]
+	} else {
+		delete filters.value['title']
+	}
+}
+
+const updateCertificationFilter = () => {
+	if (certification.value) {
+		filters.value['certification'] = 1
+	} else {
+		delete filters.value['certification']
+	}
+}
+
+const updateTabFilter = () => {
+	orderBy.value = 'start_date'
+	if (!user.data) {
+		return
+	}
+	if (currentTab.value == 'Enrolled' && user.data?.is_student) {
+		filters.value['enrolled'] = 1
+		delete filters.value['start_date']
+		delete filters.value['published']
+		orderBy.value = 'start_date desc'
+	} else if (user.data?.is_student) {
+		delete filters.value['enrolled']
+	} else {
+		delete filters.value['start_date']
+		delete filters.value['published']
+		orderBy.value = 'start_date desc'
+		if (currentTab.value == 'Upcoming') {
+			filters.value['start_date'] = ['>=', dayjs().format('YYYY-MM-DD')]
+			filters.value['published'] = 1
+			orderBy.value = 'start_date'
+		} else if (currentTab.value == 'Archived') {
+			filters.value['start_date'] = ['<=', dayjs().format('YYYY-MM-DD')]
+		} else if (currentTab.value == 'Unpublished') {
+			filters.value['published'] = 0
+		}
+	}
+}
+
+const updateStudentFilter = () => {
+	if (!user.data || (user.data?.is_student && currentTab.value != 'Enrolled')) {
+		filters.value['start_date'] = ['>=', dayjs().format('YYYY-MM-DD')]
+		filters.value['published'] = 1
+	}
+}
+
+const setQueryParams = () => {
+	let queries = new URLSearchParams(location.search)
+	let filterKeys = {
+		title: title.value,
+		category: currentCategory.value,
+		certification: certification.value,
+	}
+
+	Object.keys(filterKeys).forEach((key) => {
+		if (filterKeys[key]) {
+			queries.set(key, filterKeys[key])
+		} else {
+			queries.delete(key)
+		}
 	})
-	tabs.push({
-		label: 'Private',
-		batches: computed(() => batches.data?.private),
-		count: computed(() => batches.data?.private?.length),
+
+	history.replaceState({}, '', `${location.pathname}?${queries.toString()}`)
+}
+
+const updateCategories = (data) => {
+	data.forEach((batch) => {
+		if (
+			batch.category &&
+			!categories.value.find((category) => category.value === batch.category)
+		)
+			categories.value.push({
+				label: batch.category,
+				value: batch.category,
+			})
 	})
 }
-if (user.data) {
-	tabs.push({
-		label: 'Enrolled',
-		batches: computed(() => batches.data?.enrolled),
-		count: computed(() => batches.data?.enrolled?.length),
-	})
-}
+
+watch(currentTab, () => {
+	updateBatches()
+})
+
+const batchType = computed(() => {
+	let types = [
+		{ label: __(''), value: null },
+		{ label: __('Upcoming'), value: 'Upcoming' },
+		{ label: __('Archived'), value: 'Archived' },
+	]
+	if (user.data?.is_moderator) {
+		types.push({ label: __('Unpublished'), value: 'Unpublished' })
+	}
+	return types
+})
+
+const batchTabs = computed(() => {
+	let tabs = [
+		{
+			label: __('All'),
+		},
+	]
+	if (user.data?.is_student) {
+		tabs.push({ label: __('Enrolled') })
+	} else {
+		tabs.push({ label: __('Upcoming') })
+		tabs.push({ label: __('Archived') })
+		tabs.push({ label: __('Unpublished') })
+	}
+	return tabs
+})
+
+const breadcrumbs = computed(() => [
+	{
+		label: __('Batches'),
+		route: { name: 'Batches' },
+	},
+])
+
+const pageMeta = computed(() => {
+	return {
+		title: 'Batches',
+		description: 'All upcoming batches.',
+	}
+})
+
+updateDocumentTitle(pageMeta)
 </script>

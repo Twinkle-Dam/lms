@@ -8,43 +8,38 @@ import json
 from frappe import _
 from datetime import timedelta
 from frappe.model.document import Document
-from frappe.utils import (
-	cint,
-	format_date,
-	format_datetime,
-	get_time,
-)
+from frappe.utils import cint, format_datetime, get_time, add_days, nowdate
 from lms.lms.utils import (
 	get_lessons,
 	get_lesson_index,
 	get_lesson_url,
 	get_quiz_details,
 	get_assignment_details,
+	update_payment_record,
+	generate_slug,
 )
-from frappe.email.doctype.email_template.email_template import get_email_template
 
 
 class LMSBatch(Document):
 	def validate(self):
 		if self.seat_count:
 			self.validate_seats_left()
+		self.validate_batch_end_date()
 		self.validate_duplicate_courses()
-		self.validate_duplicate_students()
+		self.validate_payments_app()
+		self.validate_amount_and_currency()
 		self.validate_duplicate_assessments()
 		self.validate_membership()
 		self.validate_timetable()
-		self.send_confirmation_mail()
 		self.validate_evaluation_end_date()
 
-	def validate_duplicate_students(self):
-		students = [row.student for row in self.students]
-		duplicates = {student for student in students if students.count(student) > 1}
-		if len(duplicates):
-			frappe.throw(
-				_("Student {0} has already been added to this batch.").format(
-					frappe.bold(next(iter(duplicates)))
-				)
-			)
+	def autoname(self):
+		if not self.name:
+			self.name = generate_slug(self.title, "LMS Batch")
+
+	def validate_batch_end_date(self):
+		if self.end_date < self.start_date:
+			frappe.throw(_("Batch end date cannot be before the batch start date"))
 
 	def validate_duplicate_courses(self):
 		courses = [row.course for row in self.courses]
@@ -54,6 +49,16 @@ class LMSBatch(Document):
 			frappe.throw(
 				_("Course {0} has already been added to this batch.").format(frappe.bold(title))
 			)
+
+	def validate_payments_app(self):
+		if self.paid_batch:
+			installed_apps = frappe.get_installed_apps()
+			if "payments" not in installed_apps:
+				frappe.throw(_("Please install the Payments app to create a paid batches."))
+
+	def validate_amount_and_currency(self):
+		if self.paid_batch and (not self.amount or not self.currency):
+			frappe.throw(_("Amount and currency are required for paid batches."))
 
 	def validate_duplicate_assessments(self):
 		assessments = [row.assessment_name for row in self.assessment]
@@ -68,64 +73,25 @@ class LMSBatch(Document):
 					)
 				)
 
-	def send_confirmation_mail(self):
-		for student in self.students:
-			outgoing_email_account = frappe.get_cached_value(
-				"Email Account", {"default_outgoing": 1, "enable_outgoing": 1}, "name"
-			)
-			if not student.confirmation_email_sent and (
-				outgoing_email_account or frappe.conf.get("mail_login")
-			):
-				self.send_mail(student)
-				student.confirmation_email_sent = 1
-
 	def validate_evaluation_end_date(self):
 		if self.evaluation_end_date and self.evaluation_end_date < self.end_date:
 			frappe.throw(_("Evaluation end date cannot be less than the batch end date."))
 
-	def send_mail(self, student):
-		subject = _("Enrollment Confirmation for the Next Training Batch")
-		template = "batch_confirmation"
-		custom_template = frappe.db.get_single_value(
-			"LMS Settings", "batch_confirmation_template"
-		)
-
-		args = {
-			"student_name": student.student_name,
-			"start_time": self.start_time,
-			"start_date": self.start_date,
-			"medium": self.medium,
-			"name": self.name,
-		}
-
-		if custom_template:
-			email_template = get_email_template(custom_template, args)
-			subject = email_template.get("subject")
-			content = email_template.get("message")
-
-		frappe.sendmail(
-			recipients=student.student,
-			subject=subject,
-			template=template if not custom_template else None,
-			content=content if custom_template else None,
-			args=args,
-			header=[subject, "green"],
-			retry=3,
-		)
-
 	def validate_membership(self):
+		members = frappe.get_all("LMS Batch Enrollment", {"batch": self.name}, pluck="member")
 		for course in self.courses:
-			for student in self.students:
-				filters = {
-					"doctype": "LMS Enrollment",
-					"member": student.student,
-					"course": course.course,
-				}
-				if not frappe.db.exists(filters):
-					frappe.get_doc(filters).save()
+			for member in members:
+				if not frappe.db.exists(
+					"LMS Enrollment", {"course": course.course, "member": member}
+				):
+					enrollment = frappe.new_doc("LMS Enrollment")
+					enrollment.course = course.course
+					enrollment.member = member
+					enrollment.save()
 
 	def validate_seats_left(self):
-		if cint(self.seat_count) < len(self.students):
+		students = frappe.db.count("LMS Batch Enrollment", {"batch": self.name})
+		if cint(self.seat_count) < students:
 			frappe.throw(_("There are no seats available in this batch."))
 
 	def validate_timetable(self):
@@ -161,23 +127,9 @@ class LMSBatch(Document):
 					_("Row #{0} Date cannot be outside the batch duration.").format(schedule.idx)
 				)
 
-
-@frappe.whitelist()
-def remove_student(student, batch_name):
-	frappe.only_for("Moderator")
-	frappe.db.delete("Batch Student", {"student": student, "parent": batch_name})
-
-
-@frappe.whitelist()
-def remove_course(course, parent):
-	frappe.only_for("Moderator")
-	frappe.db.delete("Batch Course", {"course": course, "parent": parent})
-
-
-@frappe.whitelist()
-def remove_assessment(assessment, parent):
-	frappe.only_for("Moderator")
-	frappe.db.delete("LMS Assessment", {"assessment_name": assessment, "parent": parent})
+	def on_payment_authorized(self, payment_status):
+		if payment_status in ["Authorized", "Completed"]:
+			update_payment_record("LMS Batch", self.name)
 
 
 @frappe.whitelist()
@@ -224,6 +176,10 @@ def create_live_class(
 		class_details = frappe.get_doc(payload)
 		class_details.save()
 		return class_details
+	else:
+		frappe.throw(
+			_("Error creating live class. Please try again. {0}").format(response.text)
+		)
 
 
 def authenticate():
@@ -453,3 +409,40 @@ def is_milestone_complete(idx, batch):
 				return False
 
 	return True
+
+
+def send_batch_start_reminder():
+	batches = frappe.get_all(
+		"LMS Batch",
+		{"start_date": add_days(nowdate(), 1), "published": 1},
+		["name", "title", "start_date", "start_time", "medium"],
+	)
+
+	for batch in batches:
+		students = frappe.get_all(
+			"LMS Batch Enrollment", {"batch": batch}, ["member", "member_name"]
+		)
+		for student in students:
+			send_mail(batch, student)
+
+
+def send_mail(batch, student):
+	subject = _("Batch Start Reminder")
+	template = "batch_start_reminder"
+
+	args = {
+		"student_name": student.member_name,
+		"title": batch.title,
+		"start_date": batch.start_date,
+		"start_time": batch.start_time,
+		"medium": batch.medium,
+		"name": batch.name,
+	}
+
+	frappe.sendmail(
+		recipients=student.member,
+		subject=subject,
+		template=template,
+		args=args,
+		header=[_(f"Batch Start Reminder: {batch.title}"), "orange"],
+	)

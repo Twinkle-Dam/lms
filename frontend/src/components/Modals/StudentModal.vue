@@ -28,6 +28,7 @@
 import { Dialog, createResource } from 'frappe-ui'
 import { ref } from 'vue'
 import Link from '@/components/Controls/Link.vue'
+import { showToast } from '@/utils'
 
 const students = defineModel('reloadStudents')
 const student = ref()
@@ -45,11 +46,9 @@ const studentResource = createResource({
 	makeParams(values) {
 		return {
 			doc: {
-				doctype: 'Batch Student',
-				parent: props.batch,
-				parenttype: 'LMS Batch',
-				parentfield: 'students',
-				student: student.value,
+				doctype: 'LMS Batch Enrollment',
+				batch: props.batch,
+				member: student.value,
 			},
 		}
 	},
@@ -61,8 +60,11 @@ const addStudent = (close) => {
 		{
 			onSuccess() {
 				students.value.reload()
-				close()
 				student.value = null
+				close()
+			},
+			onError(err) {
+				showToast(__('Error'), __(err.messages?.[0] || err), 'x')
 			},
 		}
 	)

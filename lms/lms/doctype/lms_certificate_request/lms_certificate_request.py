@@ -13,6 +13,7 @@ from frappe.utils import (
 	get_datetime,
 	nowtime,
 	get_time,
+	get_fullname,
 )
 from lms.lms.utils import get_evaluator
 import json
@@ -26,28 +27,36 @@ class LMSCertificateRequest(Document):
 		self.validate_if_existing_requests()
 		self.validate_evaluation_end_date()
 
+	def after_insert(self):
+		self.send_notification()
+
 	def set_evaluator(self):
 		if not self.evaluator:
 			self.evaluator = get_evaluator(self.course, self.batch_name)
+			self.evaluator_name = get_fullname(self.evaluator)
 
 	def validate_unavailability(self):
-		unavailable = frappe.db.get_value(
-			"Course Evaluator", self.evaluator, ["unavailable_from", "unavailable_to"], as_dict=1
-		)
-		if (
-			unavailable.unavailable_from
-			and unavailable.unavailable_to
-			and getdate(self.date) >= unavailable.unavailable_from
-			and getdate(self.date) <= unavailable.unavailable_to
-		):
-			frappe.throw(
-				_(
-					"Evaluator is unavailable from {0} to {1}. Please select a date after {1}"
-				).format(
-					format_date(unavailable.unavailable_from, "medium"),
-					format_date(unavailable.unavailable_to, "medium"),
-				)
+		if self.evaluator:
+			unavailable = frappe.db.get_value(
+				"Course Evaluator",
+				self.evaluator,
+				["unavailable_from", "unavailable_to"],
+				as_dict=1,
 			)
+			if (
+				unavailable.unavailable_from
+				and unavailable.unavailable_to
+				and getdate(self.date) >= unavailable.unavailable_from
+				and getdate(self.date) <= unavailable.unavailable_to
+			):
+				frappe.throw(
+					_(
+						"The evaluator of this course is unavailable from {0} to {1}. Please select a date after {1}"
+					).format(
+						format_date(unavailable.unavailable_from, "medium"),
+						format_date(unavailable.unavailable_to, "medium"),
+					)
+				)
 
 	def validate_slot(self):
 		if frappe.db.exists(
@@ -56,6 +65,7 @@ class LMSCertificateRequest(Document):
 				"evaluator": self.evaluator,
 				"date": self.date,
 				"start_time": self.start_time,
+				"member": ["!=", self.member],
 			},
 		):
 			frappe.throw(_("The slot is already booked by another participant."))
@@ -106,6 +116,33 @@ class LMSCertificateRequest(Document):
 							format_date(evaluation_end_date, "medium")
 						)
 					)
+
+	def send_notification(self):
+		outgoing_email_account = frappe.get_cached_value(
+			"Email Account", {"default_outgoing": 1, "enable_outgoing": 1}, "name"
+		)
+		if outgoing_email_account or frappe.conf.get("mail_login"):
+			subject = _("Your evaluation slot has been booked")
+			template = "certificate_request_notification"
+
+			args = {
+				"course": self.course_title,
+				"timezone": self.timezone if self.batch_name else "",
+				"date": format_date(self.date, "medium"),
+				"member_name": self.member_name,
+				"start_time": format_time(self.start_time, "short"),
+				"evaluator": self.evaluator_name,
+			}
+
+			frappe.sendmail(
+				recipients=[self.member],
+				cc=[self.evaluator],
+				subject=subject,
+				template=template,
+				args=args,
+				header=[subject, "green"],
+				retry=3,
+			)
 
 
 def schedule_evals():

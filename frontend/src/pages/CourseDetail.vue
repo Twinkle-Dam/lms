@@ -1,37 +1,39 @@
 <template>
 	<div v-if="course.data">
 		<header
-			class="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-3 py-2.5 sm:px-5"
+			class="sticky top-0 z-10 flex items-center justify-between border-b bg-surface-white px-3 py-2.5 sm:px-5"
 		>
 			<Breadcrumbs class="h-7" :items="breadcrumbs" />
 		</header>
 		<div class="m-5">
 			<div class="flex justify-between w-full">
 				<div class="md:w-2/3">
-					<div class="text-3xl font-semibold">
+					<div class="text-3xl font-semibold text-ink-gray-9">
 						{{ course.data.title }}
 					</div>
-					<div class="my-3 leading-6">
+					<div class="my-3 leading-6 text-ink-gray-7">
 						{{ course.data.short_introduction }}
 					</div>
 					<div class="flex items-center">
 						<Tooltip
-							v-if="course.data.avg_rating"
+							v-if="parseInt(course.data.rating) > 0"
 							:text="__('Average Rating')"
 							class="flex items-center"
 						>
 							<Star class="h-5 w-5 text-gray-100 fill-orange-500" />
-							<span class="ml-1">
-								{{ course.data.avg_rating }}
+							<span class="ml-1 text-ink-gray-7">
+								{{ course.data.rating }}
 							</span>
 						</Tooltip>
-						<span v-if="course.data.avg_rating" class="mx-3">&middot;</span>
+						<span v-if="parseInt(course.data.rating) > 0" class="mx-3"
+							>&middot;</span
+						>
 						<Tooltip
 							v-if="course.data.enrollment_count"
 							:text="__('Enrolled Students')"
 							class="flex items-center"
 						>
-							<Users class="h-4 w-4 text-gray-700" />
+							<Users class="h-4 w-4 text-ink-gray-7" />
 							<span class="ml-1">
 								{{ course.data.enrollment_count_formatted }}
 							</span>
@@ -58,7 +60,7 @@
 						<Badge
 							theme="gray"
 							size="lg"
-							class="mr-2"
+							class="mr-2 text-ink-gray-9"
 							v-for="tag in course.data.tags"
 						>
 							{{ tag }}
@@ -67,14 +69,18 @@
 					<CourseCardOverlay :course="course" class="md:hidden mb-4" />
 					<div
 						v-html="course.data.description"
-						class="course-description"
+						class="ProseMirror prose prose-table:table-fixed prose-td:p-2 prose-th:p-2 prose-td:border prose-th:border prose-td:border-outline-gray-2 prose-th:border-outline-gray-2 prose-td:relative prose-th:relative prose-th:bg-surface-gray-2 prose-sm max-w-none !whitespace-normal"
 					></div>
 					<div class="mt-10">
-						<CourseOutline :courseName="course.data.name" :showOutline="true" />
+						<CourseOutline
+							:title="__('Course Outline')"
+							:courseName="course.data.name"
+							:showOutline="true"
+						/>
 					</div>
 					<CourseReviews
 						:courseName="course.data.name"
-						:avg_rating="course.data.avg_rating"
+						:avg_rating="course.data.rating"
 						:membership="course.data.membership"
 					/>
 				</div>
@@ -113,10 +119,10 @@ const course = createResource({
 })
 
 const breadcrumbs = computed(() => {
-	let items = [{ label: 'All Courses', route: { name: 'Courses' } }]
+	let items = [{ label: 'Courses', route: { name: 'Courses' } }]
 	items.push({
 		label: course?.data?.title,
-		route: { name: 'CourseDetail', params: { course: course?.data?.name } },
+		route: { name: 'CourseDetail', params: { courseName: course?.data?.name } },
 	})
 	return items
 })
@@ -131,26 +137,6 @@ const pageMeta = computed(() => {
 updateDocumentTitle(pageMeta)
 </script>
 <style>
-.course-description p {
-	margin-bottom: 1rem;
-	line-height: 1.7;
-}
-.course-description li {
-	line-height: 1.7;
-}
-
-.course-description ol {
-	list-style: auto;
-	margin: revert;
-	padding: revert;
-}
-
-.course-description ul {
-	list-style: disc;
-	margin: revert;
-	padding: revert;
-}
-
 .avatar-group {
 	display: inline-flex;
 	align-items: center;

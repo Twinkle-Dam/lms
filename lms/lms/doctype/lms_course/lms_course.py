@@ -8,7 +8,7 @@ from frappe.model.document import Document
 from frappe.utils import cint, today
 from frappe.utils.telemetry import capture
 from lms.lms.utils import get_chapters, can_create_courses
-from ...utils import generate_slug, validate_image
+from ...utils import generate_slug, validate_image, update_payment_record
 from frappe import _
 
 
@@ -18,6 +18,8 @@ class LMSCourse(Document):
 		self.validate_instructors()
 		self.validate_video_link()
 		self.validate_status()
+		self.validate_payments_app()
+		self.validate_amount_and_currency()
 		self.image = validate_image(self.image)
 
 	def validate_published(self):
@@ -44,12 +46,23 @@ class LMSCourse(Document):
 		if self.published:
 			self.status = "Approved"
 
+	def validate_payments_app(self):
+		if self.paid_course:
+			installed_apps = frappe.get_installed_apps()
+			if "payments" not in installed_apps:
+				frappe.throw(_("Please install the Payments app to create a paid courses."))
+
+	def validate_amount_and_currency(self):
+		if self.paid_course and (not self.course_price and not self.currency):
+			frappe.throw(_("Amount and currency are required for paid courses."))
+
 	def on_update(self):
 		if not self.upcoming and self.has_value_changed("upcoming"):
 			self.send_email_to_interested_users()
 
-	def after_insert(self):
-		capture("course_created", "lms")
+	def on_payment_authorized(self, payment_status):
+		if payment_status in ["Authorized", "Completed"]:
+			update_payment_record("LMS Course", self.name)
 
 	def send_email_to_interested_users(self):
 		interested_users = frappe.get_all(
@@ -80,10 +93,7 @@ class LMSCourse(Document):
 
 	def autoname(self):
 		if not self.name:
-			title = self.title
-			if self.title == "New Course":
-				title = self.title + str(random.randint(0, 99))
-			self.name = generate_slug(title, "LMS Course")
+			self.name = generate_slug(self.title, "LMS Course")
 
 	def __repr__(self):
 		return f"<Course#{self.name}>"
@@ -179,192 +189,3 @@ def reindex_exercises(doc):
 	course = frappe.get_doc("LMS Course", course_data["name"])
 	course.reindex_exercises()
 	frappe.msgprint("All exercises in this course have been re-indexed.")
-
-
-@frappe.whitelist(allow_guest=True)
-def search_course(text):
-	courses = frappe.get_all(
-		"LMS Course",
-		filters={"published": True},
-		or_filters={
-			"title": ["like", f"%{text}%"],
-			"tags": ["like", f"%{text}%"],
-			"short_introduction": ["like", f"%{text}%"],
-			"description": ["like", f"%{text}%"],
-		},
-		fields=["name", "title"],
-	)
-	return courses
-
-
-@frappe.whitelist()
-def submit_for_review(course):
-	chapters = frappe.get_all("Chapter Reference", {"parent": course})
-	if not len(chapters):
-		return "No Chp"
-	frappe.db.set_value("LMS Course", course, "status", "Under Review")
-	return "OK"
-
-
-@frappe.whitelist()
-def save_course(
-	tags,
-	title,
-	short_introduction,
-	video_link,
-	description,
-	course,
-	published,
-	upcoming,
-	image=None,
-	paid_course=False,
-	course_price=None,
-	currency=None,
-):
-	if not can_create_courses(course):
-		return
-
-	if course:
-		doc = frappe.get_doc("LMS Course", course)
-	else:
-		doc = frappe.get_doc({"doctype": "LMS Course"})
-
-	doc.update(
-		{
-			"title": title,
-			"short_introduction": short_introduction,
-			"video_link": video_link,
-			"image": image,
-			"description": description,
-			"tags": tags,
-			"published": cint(published),
-			"upcoming": cint(upcoming),
-			"paid_course": cint(paid_course),
-			"course_price": course_price,
-			"currency": currency,
-		}
-	)
-	doc.save(ignore_permissions=True)
-	return doc.name
-
-
-@frappe.whitelist()
-def save_chapter(course, title, chapter_description, idx, chapter):
-	if chapter:
-		doc = frappe.get_doc("Course Chapter", chapter)
-	else:
-		doc = frappe.get_doc({"doctype": "Course Chapter"})
-
-	doc.update({"course": course, "title": title, "description": chapter_description})
-	doc.save(ignore_permissions=True)
-
-	if chapter:
-		chapter_reference = frappe.get_doc("Chapter Reference", {"chapter": chapter})
-	else:
-		chapter_reference = frappe.get_doc(
-			{
-				"doctype": "Chapter Reference",
-				"parent": course,
-				"parenttype": "LMS Course",
-				"parentfield": "chapters",
-				"idx": idx,
-			}
-		)
-
-	chapter_reference.update({"chapter": doc.name})
-	chapter_reference.save(ignore_permissions=True)
-
-	return doc.name
-
-
-@frappe.whitelist()
-def save_lesson(
-	title,
-	body,
-	chapter,
-	preview,
-	idx,
-	lesson,
-	instructor_notes=None,
-	youtube=None,
-	quiz_id=None,
-	question=None,
-	file_type=None,
-):
-	if lesson:
-		doc = frappe.get_doc("Course Lesson", lesson)
-	else:
-		doc = frappe.get_doc({"doctype": "Course Lesson"})
-
-	doc.update(
-		{
-			"chapter": chapter,
-			"title": title,
-			"body": body,
-			"instructor_notes": instructor_notes,
-			"include_in_preview": preview,
-			"youtube": youtube,
-			"quiz_id": quiz_id,
-			"question": question,
-			"file_type": file_type,
-		}
-	)
-	doc.save(ignore_permissions=True)
-
-	if lesson:
-		lesson_reference = frappe.get_doc("Lesson Reference", {"lesson": lesson})
-	else:
-		lesson_reference = frappe.get_doc(
-			{
-				"doctype": "Lesson Reference",
-				"parent": chapter,
-				"parenttype": "Course Chapter",
-				"parentfield": "lessons",
-				"idx": idx,
-			}
-		)
-
-	lesson_reference.update({"lesson": doc.name})
-	lesson_reference.save(ignore_permissions=True)
-
-	return doc.name
-
-
-@frappe.whitelist()
-def reorder_lesson(old_chapter, old_lesson_array, new_chapter, new_lesson_array):
-	if old_chapter == new_chapter:
-		sort_lessons(new_chapter, new_lesson_array)
-	else:
-		sort_lessons(old_chapter, old_lesson_array)
-		sort_lessons(new_chapter, new_lesson_array)
-
-
-def sort_lessons(chapter, lesson_array):
-	lesson_array = json.loads(lesson_array)
-	for les in lesson_array:
-		ref = frappe.get_all("Lesson Reference", {"lesson": les}, ["name", "idx"])
-		if ref:
-			frappe.db.set_value(
-				"Lesson Reference",
-				ref[0].name,
-				{
-					"parent": chapter,
-					"idx": lesson_array.index(les) + 1,
-				},
-			)
-
-
-@frappe.whitelist()
-def reorder_chapter(chapter_array):
-	chapter_array = json.loads(chapter_array)
-
-	for chap in chapter_array:
-		ref = frappe.get_all("Chapter Reference", {"chapter": chap}, ["name", "idx"])
-		if ref:
-			frappe.db.set_value(
-				"Chapter Reference",
-				ref[0].name,
-				{
-					"idx": chapter_array.index(chap) + 1,
-				},
-			)

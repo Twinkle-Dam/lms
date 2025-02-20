@@ -16,25 +16,33 @@
 		<template #body-content>
 			<div class="flex flex-col gap-4">
 				<div>
-					<div class="mb-1.5 text-sm text-gray-600">
+					<div class="mb-1.5 text-sm text-ink-gray-5">
 						{{ __('Course') }}
 					</div>
 					<Select v-model="evaluation.course" :options="getCourses()" />
 				</div>
 				<div>
-					<div class="mb-1.5 text-sm text-gray-600">
+					<div class="mb-1.5 text-sm text-ink-gray-5">
 						{{ __('Date') }}
 					</div>
-					<FormControl type="date" v-model="evaluation.date" />
+					<FormControl
+						type="date"
+						v-model="evaluation.date"
+						:min="
+							dayjs()
+								.add(dayjs.duration({ days: 1 }))
+								.format('YYYY-MM-DD')
+						"
+					/>
 				</div>
 				<div v-if="slots.data?.length">
-					<div class="mb-1.5 text-sm text-gray-600">
+					<div class="mb-1.5 text-sm text-ink-gray-5">
 						{{ __('Select a slot') }}
 					</div>
 					<div class="grid grid-cols-2 gap-2">
 						<div v-for="slot in slots.data">
 							<div
-								class="text-base text-center border rounded-md bg-gray-200 p-2 cursor-pointer"
+								class="text-base text-center border rounded-md bg-surface-gray-3 p-2 cursor-pointer"
 								@click="saveSlot(slot)"
 								:class="{
 									'border-gray-900': evaluation.start_time == slot.start_time,
@@ -48,7 +56,7 @@
 				</div>
 				<div
 					v-else-if="evaluation.course && evaluation.date"
-					class="text-sm italic text-red-600"
+					class="text-sm italic text-ink-red-4"
 				>
 					{{ __('No slots available for this date.') }}
 				</div>
@@ -130,11 +138,20 @@ function submitEvaluation(close) {
 			close()
 		},
 		onError(err) {
+			let message = err.messages?.[0] || err
+			let unavailabilityMessage
+
+			if (typeof message === 'string') {
+				unavailabilityMessage = message?.includes('unavailable')
+			} else {
+				unavailabilityMessage = false
+			}
+
 			createToast({
-				title: 'Error',
-				text: err.messages?.[0] || err,
-				icon: 'x',
-				iconClasses: 'bg-red-600 text-white rounded-md p-px',
+				title: unavailabilityMessage ? __('Evaluator is Unavailable') : '',
+				text: message,
+				icon: unavailabilityMessage ? 'alert-circle' : 'x',
+				iconClasses: 'bg-yellow-600 text-ink-white rounded-md p-px',
 				position: 'top-center',
 				timeout: 10,
 			})
@@ -145,10 +162,12 @@ function submitEvaluation(close) {
 const getCourses = () => {
 	let courses = []
 	for (const course of props.courses) {
-		courses.push({
-			label: course.title,
-			value: course.course,
-		})
+		if (course.evaluator) {
+			courses.push({
+				label: course.title,
+				value: course.course,
+			})
+		}
 	}
 	return courses
 }

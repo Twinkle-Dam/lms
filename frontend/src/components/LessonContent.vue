@@ -9,7 +9,7 @@
 			allowfullscreen
 		></iframe>
 	</div>
-	<div v-for="block in content.split('\n\n')">
+	<div v-for="block in content?.split('\n\n')">
 		<div v-if="block.includes('{{ YouTubeVideo')">
 			<iframe
 				class="youtube-video"
@@ -37,7 +37,7 @@
 			<iframe
 				:src="getPDFSource(block)"
 				width="100%"
-				height="400"
+				height="700px"
 				frameborder="0"
 				allowfullscreen
 			></iframe>

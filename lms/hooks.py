@@ -4,9 +4,11 @@ app_name = "frappe_lms"
 app_title = "Frappe LMS"
 app_publisher = "Frappe"
 app_description = "Frappe LMS App"
-app_icon = "octicon octicon-file-directory"
+app_icon_url = "/assets/lms/images/lms-logo.png"
+app_icon_title = "Learning"
+app_icon_route = "/lms"
 app_color = "grey"
-app_email = "school@frappe.io"
+app_email = "jannat@frappe.io"
 app_license = "AGPL"
 
 # Includes in <head>
@@ -61,8 +63,6 @@ web_include_js = ["website.bundle.js"]
 after_install = "lms.install.after_install"
 after_sync = "lms.install.after_sync"
 before_uninstall = "lms.install.before_uninstall"
-
-
 setup_wizard_requires = "assets/lms/js/setup_wizard.js"
 
 # Desk Notifications
@@ -110,12 +110,18 @@ doc_events = {
 # ---------------
 scheduler_events = {
 	"hourly": [
-		"lms.lms.doctype.lms_certificate_request.lms_certificate_request.schedule_evals"
+		"lms.lms.doctype.lms_certificate_request.lms_certificate_request.schedule_evals",
+		"lms.lms.api.update_course_statistics",
 	],
-	"daily": ["lms.job.doctype.job_opportunity.job_opportunity.update_job_openings"],
+	"daily": [
+		"lms.job.doctype.job_opportunity.job_opportunity.update_job_openings",
+		"lms.lms.doctype.lms_payment.lms_payment.send_payment_reminder",
+		"lms.lms.doctype.lms_batch.lms_batch.send_batch_start_reminder",
+		"lms.lms.doctype.lms_live_class.lms_live_class.send_live_class_reminder",
+	],
 }
 
-fixtures = ["Custom Field", "Function", "Industry"]
+fixtures = ["Custom Field", "Function", "Industry", "LMS Category"]
 
 # Testing
 # -------
@@ -177,50 +183,15 @@ update_website_context = [
 
 jinja = {
 	"methods": [
-		"lms.page_renderers.get_profile_url",
-		"lms.overrides.user.get_enrolled_courses",
-		"lms.overrides.user.get_course_membership",
-		"lms.overrides.user.get_authored_courses",
-		"lms.overrides.user.get_palette",
-		"lms.lms.utils.get_membership",
-		"lms.lms.utils.get_lessons",
+		"lms.lms.utils.get_signup_optin_checks",
 		"lms.lms.utils.get_tags",
+		"lms.lms.utils.get_lesson_count",
 		"lms.lms.utils.get_instructors",
-		"lms.lms.utils.get_students",
-		"lms.lms.utils.get_average_rating",
-		"lms.lms.utils.is_certified",
 		"lms.lms.utils.get_lesson_index",
 		"lms.lms.utils.get_lesson_url",
-		"lms.lms.utils.get_chapters",
-		"lms.lms.utils.get_slugified_chapter_title",
-		"lms.lms.utils.get_progress",
-		"lms.lms.utils.render_html",
-		"lms.lms.utils.is_mentor",
-		"lms.lms.utils.is_cohort_staff",
-		"lms.lms.utils.get_mentors",
-		"lms.lms.utils.get_reviews",
-		"lms.lms.utils.is_eligible_to_review",
-		"lms.lms.utils.get_initial_members",
-		"lms.lms.utils.get_sorted_reviews",
+		"lms.page_renderers.get_profile_url",
+		"lms.overrides.user.get_palette",
 		"lms.lms.utils.is_instructor",
-		"lms.lms.utils.convert_number_to_character",
-		"lms.lms.utils.get_signup_optin_checks",
-		"lms.lms.utils.get_popular_courses",
-		"lms.lms.utils.format_amount",
-		"lms.lms.utils.first_lesson_exists",
-		"lms.lms.utils.get_courses_under_review",
-		"lms.lms.utils.has_course_instructor_role",
-		"lms.lms.utils.has_course_moderator_role",
-		"lms.lms.utils.get_certificates",
-		"lms.lms.utils.format_number",
-		"lms.lms.utils.get_lesson_count",
-		"lms.lms.utils.get_all_memberships",
-		"lms.lms.utils.get_filtered_membership",
-		"lms.lms.utils.show_start_learing_cta",
-		"lms.lms.utils.can_create_courses",
-		"lms.lms.utils.get_telemetry_boot_info",
-		"lms.lms.utils.is_onboarding_complete",
-		"lms.www.utils.is_student",
 	],
 	"filters": [],
 }
@@ -259,6 +230,7 @@ page_renderer = [
 	"lms.page_renderers.ProfileRedirectPage",
 	"lms.page_renderers.ProfilePage",
 	"lms.page_renderers.CoursePage",
+	"lms.page_renderers.SCORMRenderer",
 ]
 
 # set this to "/" to have profiles on the top-level
@@ -267,3 +239,13 @@ profile_url_prefix = "/users/"
 signup_form_template = "lms.plugins.show_custom_signup"
 
 on_session_creation = "lms.overrides.user.on_session_creation"
+
+add_to_apps_screen = [
+	{
+		"name": "lms",
+		"logo": "/assets/lms/images/lms-logo.png",
+		"title": "Learning",
+		"route": "/lms",
+		"has_permission": "lms.lms.api.check_app_permission",
+	}
+]

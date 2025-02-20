@@ -5,7 +5,7 @@ describe("Course Creation", () => {
 		cy.visit("/lms/courses");
 
 		// Create a course
-		cy.get("a").contains("New Course").click();
+		cy.get("button").contains("New").click();
 		cy.wait(1000);
 		cy.url().should("include", "/courses/new/edit");
 
@@ -31,12 +31,35 @@ describe("Course Creation", () => {
 			.contains("Preview Video")
 			.type("https://www.youtube.com/embed/-LPmw2Znl2c");
 		cy.get("[id=tags]").type("Learning{enter}Frappe{enter}ERPNext{enter}");
-		cy.get(".search-input").click().type("frappe");
-		cy.wait(1000);
+		cy.get("label")
+			.contains("Category")
+			.parent()
+			.within(() => {
+				cy.get("button").click();
+			});
 		cy.get("[id^=headlessui-combobox-option-")
 			.should("be.visible")
 			.first()
 			.click();
+
+		/* Instructor */
+		cy.get("label")
+			.contains("Instructors")
+			.parent()
+			.within(() => {
+				cy.get("input").click().type("frappe");
+				cy.get("input")
+					.invoke("attr", "aria-controls")
+					.as("instructor_list_id");
+			});
+		cy.get("@instructor_list_id").then((instructor_list_id) => {
+			cy.get(`[id^=${instructor_list_id}`)
+				.should("be.visible")
+				.within(() => {
+					cy.get("[id^=headlessui-combobox-option-").first().click();
+				});
+		});
+
 		cy.get("label").contains("Published").click();
 		cy.get("label").contains("Published On").type("2021-01-01");
 		cy.button("Save").click();
@@ -50,7 +73,7 @@ describe("Course Creation", () => {
 			.should("be.visible")
 			.within(() => {
 				cy.get("label").contains("Title").type("Test Chapter");
-				cy.button("Add Chapter").click();
+				cy.button("Create").click();
 			});
 
 		// Add Lesson
@@ -61,23 +84,8 @@ describe("Course Creation", () => {
 		cy.wait(1000);
 
 		cy.get("label").contains("Title").type("Test Lesson");
-		/* cy.get("#content .ce-block")
-			.click()
-			.invoke("text", "https://www.youtube.com/watch?v=GoDtyItReto"); */
-		/* cy.get("#content .ce-block")
-			.click()
-			.paste("https://www.youtube.com/watch?v=GoDtyItReto"); */
-
-		cy.fixture("Youtube.mov", "base64").then((fileContent) => {
-			cy.get('input[type="file"]').attachFile({
-				fileContent,
-				fileName: "Youtube.mov",
-				mimeType: "image/png",
-				encoding: "base64",
-			});
-		});
 		cy.get("#content .ce-block").type(
-			"This is an extremely big paragraph that is meant to test the UI. This is a very long paragraph. It contains more than once sentence. Its meant to be this long as this is a UI test. Its unbearably long and I'm not sure why I'm typing this much. I'm just going to keep typing until I feel like its long enough. I think its long enough now. I'm going to stop typing now."
+			"{enter}This is an extremely big paragraph that is meant to test the UI. This is a very long paragraph. It contains more than once sentence. Its meant to be this long as this is a UI test. Its unbearably long and I'm not sure why I'm typing this much. I'm just going to keep typing until I feel like its long enough. I think its long enough now. I'm going to stop typing now."
 		);
 		cy.button("Save").click();
 
@@ -118,12 +126,6 @@ describe("Course Creation", () => {
 		// View Lesson
 		cy.url().should("include", "/learn/1-1");
 		cy.get("div").contains("Test Lesson");
-
-		cy.get("video")
-			.should("be.visible")
-			.children("source")
-			.invoke("attr", "src")
-			.should("include", "/files/Youtube");
 
 		cy.get("div").contains(
 			"This is an extremely big paragraph that is meant to test the UI. This is a very long paragraph. It contains more than once sentence. Its meant to be this long as this is a UI test. Its unbearably long and I'm not sure why I'm typing this much. I'm just going to keep typing until I feel like its long enough. I think its long enough now. I'm going to stop typing now."

@@ -1,7 +1,7 @@
 <template>
 	<div class="">
 		<header
-			class="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-3 py-2.5 sm:px-5"
+			class="sticky top-0 z-10 flex items-center justify-between border-b bg-surface-white px-3 py-2.5 sm:px-5"
 		>
 			<Breadcrumbs
 				class="h-7"
@@ -50,51 +50,79 @@
 				</Button>
 			</div>
 		</header>
-		<div v-if="job.data" class="w-3/4 mx-auto">
+		<div v-if="job.data" class="max-w-3xl mx-auto">
 			<div class="p-4">
-				<div class="flex mb-4">
-					<img
-						:src="job.data.company_logo"
-						class="w-16 h-16 rounded-lg object-contain mr-4"
-						:alt="job.data.company_name"
-					/>
-					<div>
-						<div class="text-2xl font-semibold mb-4">
+				<div class="space-y-5 mb-10">
+					<div class="flex items-center">
+						<img
+							:src="job.data.company_logo"
+							class="w-16 h-16 rounded-lg object-contain mr-4"
+							:alt="job.data.company_name"
+						/>
+						<div class="text-2xl text-ink-gray-9 font-semibold mb-4">
 							{{ job.data.job_title }}
 						</div>
-						<div class="grid grid-cols-3 gap-8">
-							<div class="grid grid-cols-1 gap-2">
-								<div class="flex items-center space-x-2">
-									<Building2 class="h-4 w-4 stroke-1.5" />
-									<span>{{ job.data.company_name }}</span>
-								</div>
-								<div class="flex items-center space-x-2">
-									<MapPin class="h-4 w-4 stroke-1.5" />
-									<span>{{ job.data.location }}</span>
-								</div>
-							</div>
-							<div class="grid grid-cols-1 gap-2">
-								<div class="flex items-center space-x-2">
-									<ClipboardType class="h-4 w-4 stroke-1.5" />
-									<span>{{ job.data.type }}</span>
-								</div>
-								<div class="flex items-center space-x-2">
-									<CalendarDays class="h-4 w-4 stroke-1.5" />
-									<span>{{
-										dayjs(job.data.creation).format('DD MMM YYYY')
-									}}</span>
+					</div>
+					<div>
+						<div
+							class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-5 md:gap-y-5"
+						>
+							<div class="flex items-center space-x-4">
+								<Building2 class="h-4 w-4 text-ink-green-2" />
+								<div class="flex flex-col space-y-2 text-ink-gray-7">
+									<span class="text-xs text-ink-gray-5 font-medium uppercase">
+										{{ __('Organisation') }}
+									</span>
+									<span class="text-sm font-semibold">
+										{{ job.data.company_name }}
+									</span>
 								</div>
 							</div>
-							<div class="grid grid-cols-1 h-fit">
-								<div
-									v-if="applicationCount.data"
-									class="flex items-center space-x-2"
-								>
-									<SquareUserRound class="h-4 w-4 stroke-1.5" />
-									<span
-										>{{ applicationCount.data }}
-										{{ __('applications received') }}</span
-									>
+							<div class="flex items-center space-x-4">
+								<MapPin class="size-4 text-ink-red-3" />
+								<div class="flex flex-col space-y-2 text-ink-gray-7">
+									<span class="text-xs font-medium uppercase">
+										{{ __('Location') }}
+									</span>
+									<span class="text-sm font-semibold">
+										{{ job.data.location }}
+									</span>
+								</div>
+							</div>
+							<div class="flex items-center space-x-4">
+								<ClipboardType class="h-4 w-4 text-yellow-500" />
+								<div class="flex flex-col space-y-2 text-ink-gray-7">
+									<span class="text-xs font-medium uppercase">
+										{{ __('Category') }}
+									</span>
+									<span class="text-sm font-semibold">
+										{{ job.data.type }}
+									</span>
+								</div>
+							</div>
+							<div class="flex items-center space-x-4">
+								<CalendarDays class="h-4 w-4 text-ink-blue-2" />
+								<div class="flex flex-col space-y-2 text-ink-gray-7">
+									<span class="text-xs font-medium uppercase">
+										{{ __('Posted on') }}
+									</span>
+									<span class="text-sm font-semibold">
+										{{ dayjs(job.data.creation).format('DD MMM YYYY') }}
+									</span>
+								</div>
+							</div>
+							<div
+								v-if="applicationCount.data"
+								class="flex items-center space-x-4"
+							>
+								<SquareUserRound class="h-4 w-4 text-purple-500" />
+								<div class="flex flex-col space-y-2 text-ink-gray-7">
+									<span class="text-xs font-medium uppercase">
+										{{ __('Applications Received') }}
+									</span>
+									<span class="text-sm font-semibold">
+										{{ applicationCount.data }}
+									</span>
 								</div>
 							</div>
 						</div>
@@ -102,7 +130,7 @@
 				</div>
 				<p
 					v-html="job.data.description"
-					class="ProseMirror prose prose-table:table-fixed prose-td:p-2 prose-th:p-2 prose-td:border prose-th:border prose-td:border-gray-300 prose-th:border-gray-300 prose-td:relative prose-th:relative prose-th:bg-gray-100 prose-sm max-w-none !whitespace-normal mt-6"
+					class="ProseMirror prose prose-table:table-fixed prose-td:p-2 prose-th:p-2 prose-td:border prose-th:border prose-td:border-outline-gray-2 prose-th:border-outline-gray-2 prose-td:relative prose-th:relative prose-th:bg-surface-gray-2 prose-sm max-w-none !whitespace-normal mt-6"
 				></p>
 			</div>
 			<JobApplicationModal

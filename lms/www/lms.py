@@ -1,8 +1,9 @@
 import frappe
-from frappe.utils.telemetry import capture
-from frappe import _
-from bs4 import BeautifulSoup
 import re
+from bs4 import BeautifulSoup
+from frappe import _
+from frappe.utils.telemetry import capture
+from frappe.utils import cint
 
 no_cache = 1
 
@@ -17,8 +18,9 @@ def get_context():
 	csrf_token = frappe.sessions.get_csrf_token()
 	frappe.db.commit()  # nosemgrep
 	context.csrf_token = csrf_token
-	if frappe.session.user != "Guest":
-		capture("active_site", "lms")
+	context.setup_complete = cint(frappe.get_system_settings("setup_complete"))
+	capture("active_site", "lms")
+	context.favicon = frappe.db.get_single_value("Website Settings", "favicon")
 	return context
 
 
@@ -149,8 +151,9 @@ def get_meta(app_path):
 			as_dict=True,
 		)
 
-		soup = BeautifulSoup(user.bio, "html.parser")
-		user.bio = soup.get_text()
+		if user.bio:
+			soup = BeautifulSoup(user.bio, "html.parser")
+			user.bio = soup.get_text()
 
 		return {
 			"title": user.full_name,

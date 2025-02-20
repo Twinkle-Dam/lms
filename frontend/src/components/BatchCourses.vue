@@ -1,18 +1,14 @@
 <template>
 	<div>
 		<div class="flex items-center justify-between mb-4">
-			<div class="text-xl font-semibold">
+			<div class="text-lg font-semibold text-ink-gray-9">
 				{{ __('Courses') }}
 			</div>
-			<Button
-				v-if="user.data?.is_moderator"
-				variant="solid"
-				@click="openCourseModal()"
-			>
+			<Button v-if="canSeeAddButton()" @click="openCourseModal()">
 				<template #prefix>
 					<Plus class="h-4 w-4" />
 				</template>
-				{{ __('Add Course') }}
+				{{ __('Add') }}
 			</Button>
 		</div>
 		<div v-if="courses.data?.length">
@@ -22,6 +18,7 @@
 				row-key="batch_course"
 				:options="{
 					showTooltip: false,
+					selectable: user.data?.is_student ? false : true,
 					getRowRoute: (row) => ({
 						name: 'CourseDetail',
 						params: { courseName: row.name },
@@ -29,7 +26,7 @@
 				}"
 			>
 				<ListHeader
-					class="mb-2 grid items-center space-x-4 rounded bg-gray-100 p-2"
+					class="mb-2 grid items-center space-x-4 rounded bg-surface-gray-2 p-2"
 				>
 					<ListHeaderItem :item="item" v-for="item in getCoursesColumns()">
 						<template #prefix="{ item }">
@@ -88,6 +85,7 @@ import {
 	ListRowItem,
 } from 'frappe-ui'
 import { Plus, Trash2 } from 'lucide-vue-next'
+import { showToast } from '@/utils'
 
 const showCourseModal = ref(false)
 const user = inject('$user')
@@ -121,34 +119,43 @@ const getCoursesColumns = () => {
 		},
 		{
 			label: 'Lessons',
-			key: 'lesson_count',
+			key: 'lessons',
 			align: 'right',
 		},
 		{
 			label: 'Enrollments',
 			align: 'right',
-			key: 'enrollment_count',
+			key: 'enrollments',
 		},
 	]
 }
 
-const removeCourse = createResource({
-	url: 'frappe.client.delete',
+const deleteCourses = createResource({
+	url: 'lms.lms.api.delete_documents',
 	makeParams(values) {
 		return {
 			doctype: 'Batch Course',
-			name: values.course,
+			documents: values.courses,
 		}
 	},
 })
 
 const removeCourses = (selections, unselectAll) => {
-	selections.forEach(async (course) => {
-		removeCourse.submit({ course })
-	})
-	setTimeout(() => {
-		courses.reload()
-		unselectAll()
-	}, 1000)
+	deleteCourses.submit(
+		{
+			courses: Array.from(selections),
+		},
+		{
+			onSuccess(data) {
+				courses.reload()
+				showToast(__('Success'), __('Courses deleted successfully'), 'check')
+				unselectAll()
+			},
+		}
+	)
+}
+
+const canSeeAddButton = () => {
+	return user.data?.is_moderator || user.data?.is_evaluator
 }
 </script>

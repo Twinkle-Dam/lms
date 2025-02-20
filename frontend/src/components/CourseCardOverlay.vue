@@ -1,5 +1,5 @@
 <template>
-	<div class="shadow rounded-md min-w-80">
+	<div class="border-2 rounded-md min-w-80">
 		<iframe
 			v-if="course.data.video_link"
 			:src="video_link"
@@ -48,7 +48,7 @@
 			</router-link>
 			<div
 				v-else-if="course.data.disable_self_learning"
-				class="bg-blue-100 text-blue-900 text-sm rounded-md py-1 px-3"
+				class="bg-surface-blue-2 text-blue-900 text-sm rounded-md py-1 px-3"
 			>
 				{{ __('Contact the Administrator to enroll for this course.') }}
 			</div>
@@ -63,10 +63,19 @@
 					{{ __('Start Learning') }}
 				</span>
 			</Button>
+			<Button
+				v-if="canGetCertificate"
+				@click="fetchCertificate()"
+				variant="subtle"
+				class="w-full mt-2"
+				size="md"
+			>
+				{{ __('Get Certificate') }}
+			</Button>
 			<router-link
 				v-if="user?.data?.is_moderator || is_instructor()"
 				:to="{
-					name: 'CreateCourse',
+					name: 'CourseForm',
 					params: {
 						courseName: course.data.name,
 					},
@@ -78,27 +87,32 @@
 					</span>
 				</Button>
 			</router-link>
-			<div class="mt-8 mb-4 font-medium">
-				{{ __('This course has:') }}
-			</div>
-			<div class="flex items-center mb-3">
-				<BookOpen class="h-5 w-5 stroke-1.5 text-gray-600" />
-				<span class="ml-2">
-					{{ course.data.lesson_count }} {{ __('Lessons') }}
-				</span>
-			</div>
-			<div class="flex items-center mb-3">
-				<Users class="h-5 w-5 stroke-1.5 text-gray-600" />
-				<span class="ml-2">
-					{{ course.data.enrollment_count_formatted }}
-					{{ __('Enrolled Students') }}
-				</span>
-			</div>
-			<div class="flex items-center">
-				<Star class="h-5 w-5 stroke-1.5 fill-orange-500 text-gray-50" />
-				<span class="ml-2">
-					{{ course.data.avg_rating }} {{ __('Rating') }}
-				</span>
+			<div class="space-y-4">
+				<div class="mt-8 font-medium text-ink-gray-9">
+					{{ __('This course has:') }}
+				</div>
+				<div class="flex items-center text-ink-gray-9">
+					<BookOpen class="h-4 w-4 stroke-1.5" />
+					<span class="ml-2">
+						{{ course.data.lessons }} {{ __('Lessons') }}
+					</span>
+				</div>
+				<div class="flex items-center text-ink-gray-9">
+					<Users class="h-4 w-4 stroke-1.5" />
+					<span class="ml-2">
+						{{ formatAmount(course.data.enrollments) }}
+						{{ __('Enrolled Students') }}
+					</span>
+				</div>
+				<div
+					v-if="parseInt(course.data.rating) > 0"
+					class="flex items-center text-ink-gray-9"
+				>
+					<Star class="h-4 w-4 stroke-1.5 fill-orange-500 text-gray-50" />
+					<span class="ml-2">
+						{{ course.data.rating }} {{ __('Rating') }}
+					</span>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -107,7 +121,8 @@
 import { BookOpen, Users, Star } from 'lucide-vue-next'
 import { computed, inject } from 'vue'
 import { Button, createResource } from 'frappe-ui'
-import { createToast } from '@/utils/'
+import { showToast, formatAmount } from '@/utils/'
+import { capture } from '@/telemetry'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -129,14 +144,14 @@ const video_link = computed(() => {
 
 function enrollStudent() {
 	if (!user.data) {
-		createToast({
-			title: 'Please Login',
-			icon: 'alert-circle',
-			iconClasses: 'text-yellow-600 bg-yellow-100',
-		})
+		showToast(
+			__('Please Login'),
+			__('You need to login first to enroll for this course'),
+			'alert-circle'
+		)
 		setTimeout(() => {
 			window.location.href = `/login?redirect-to=${window.location.pathname}`
-		}, 3000)
+		}, 2000)
 	} else {
 		const enrollStudentResource = createResource({
 			url: 'lms.lms.doctype.lms_enrollment.lms_enrollment.create_membership',
@@ -146,11 +161,14 @@ function enrollStudent() {
 				course: props.course.data.name,
 			})
 			.then(() => {
-				createToast({
-					title: 'Enrolled Successfully',
-					icon: 'check',
-					iconClasses: 'text-green-600 bg-green-100',
+				capture('enrolled_in_course', {
+					course: props.course.data.name,
 				})
+				showToast(
+					__('Success'),
+					__('You have been enrolled in this course'),
+					'check'
+				)
 				setTimeout(() => {
 					router.push({
 						name: 'Lesson',
@@ -160,7 +178,7 @@ function enrollStudent() {
 							lessonNumber: 1,
 						},
 					})
-				}, 3000)
+				}, 2000)
 			})
 	}
 }
@@ -173,5 +191,39 @@ const is_instructor = () => {
 		}
 	})
 	return user_is_instructor
+}
+
+const canGetCertificate = computed(() => {
+	if (
+		props.course.data?.enable_certification &&
+		props.course.data?.membership?.progress == 100
+	) {
+		return true
+	}
+	return false
+})
+
+const certificate = createResource({
+	url: 'lms.lms.doctype.lms_certificate.lms_certificate.create_certificate',
+	makeParams(values) {
+		return {
+			course: values.course,
+		}
+	},
+	onSuccess(data) {
+		window.open(
+			`/api/method/frappe.utils.print_format.download_pdf?doctype=LMS+Certificate&name=${
+				data.name
+			}&format=${encodeURIComponent(data.template)}`,
+			'_blank'
+		)
+	},
+})
+
+const fetchCertificate = () => {
+	certificate.submit({
+		course: props.course.data?.name,
+		member: user.data?.name,
+	})
 }
 </script>

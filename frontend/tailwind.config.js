@@ -1,5 +1,5 @@
 module.exports = {
-	presets: [require('frappe-ui/src/utils/tailwind.config')],
+	presets: [require('frappe-ui/src/tailwind/preset')],
 	content: [
 		'./index.html',
 		'./src/**/*.{vue,js,ts,jsx,tsx}',
@@ -10,6 +10,10 @@ module.exports = {
 		extend: {
 			strokeWidth: {
 				1.5: '1.5',
+			},
+			screens: {
+				'2xl': '1536px',
+				'3xl': '1920px',
 			},
 		},
 	},
